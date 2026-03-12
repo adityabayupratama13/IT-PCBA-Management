@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
-  const [name, setName]         = useState('');
   const [badge, setBadge]       = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw]     = useState(false);
@@ -23,12 +22,12 @@ export default function LoginPage() {
 
     await new Promise(r => setTimeout(r, 600)); // slight delay for UX
 
-    const ok = login(name, badge, password);
+    const ok = login(badge, password);
     if (ok) {
-      toast.success(`Welcome, ${name}!`);
+      toast.success('Welcome back!');
       router.push('/');
     } else {
-      setError('Name, Badge Number, or Password is incorrect. Please try again.');
+      setError('Badge Number or Password is incorrect. Please try again.');
     }
     setLoading(false);
   };
@@ -58,21 +57,6 @@ export default function LoginPage() {
           style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
         >
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">Full Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. Aditya Bayu Pratama"
-                required
-                autoFocus
-                className={inputClass}
-                style={{ background: 'var(--muted)', borderColor: 'var(--border)' }}
-              />
-            </div>
-
             {/* Badge Number */}
             <div>
               <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
@@ -85,6 +69,7 @@ export default function LoginPage() {
                 onChange={e => setBadge(e.target.value)}
                 placeholder="e.g. 36443"
                 required
+                autoFocus
                 className={inputClass}
                 style={{ background: 'var(--muted)', borderColor: 'var(--border)' }}
               />

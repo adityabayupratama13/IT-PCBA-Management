@@ -1,8 +1,0 @@
-feat: implement badge and password authentication
-
-- Replace generic admin/member login with Name, Badge, and Password logic
-- Set Aditya Bayu Pratama as hardcoded Master account
-- Restrict Team Management CRUD to Master role only
-- Add Badge and Password fields to new member registration
-- Implement Role Management (CRUD) for Master in Team page
-- Update Header to display logged in user's real name and badge

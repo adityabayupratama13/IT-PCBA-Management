@@ -45,7 +45,7 @@ interface AuthContextType {
   currentUser: Member | null;
   isMaster: boolean;
   members: Member[];
-  login: (name: string, badge: string, password: string) => boolean;
+  login: (badge: string, password: string) => boolean;
   logout: () => void;
   addMember: (member: Omit<Member, 'id'>) => void;
   updateMember: (member: Member) => void;
@@ -94,10 +94,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('it-mgt-members', JSON.stringify(members));
   }, [members, isMounted]);
 
-  const login = (name: string, badge: string, password: string): boolean => {
+  const login = (badge: string, password: string): boolean => {
     // Check master account
     if (
-      name.trim().toLowerCase() === MASTER_ACCOUNT.name.toLowerCase() &&
       badge.trim() === MASTER_ACCOUNT.badge &&
       password === MASTER_ACCOUNT.password
     ) {
@@ -117,7 +116,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check registered members
     const found = members.find(
       m =>
-        m.name.trim().toLowerCase() === name.trim().toLowerCase() &&
         m.badge.trim() === badge.trim() &&
         m.password === password &&
         m.status === 'Active'

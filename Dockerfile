@@ -15,8 +15,7 @@ RUN npm run build
 
 FROM node:20-alpine AS runner
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN apk add --no-cache libc6-compat
 
 WORKDIR /app
 
@@ -26,9 +25,10 @@ COPY --from=builder /app/package.json ./
 
 RUN npm install --production
 
-ENV NEXT_TELEMETRY_DISABLED=1 PORT=3002
-EXPOSE 3002
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3002
 
-USER nextjs
+EXPOSE 3002
 
 CMD ["node", "server.js"]
