@@ -1,0 +1,6 @@
+feat: add Docker support
+
+- Dockerfile with 3-stage build (deps, builder, runner)
+- docker-compose.yml mapping port 3003
+- .dockerignore for fast build context
+- next.config.mjs with standalone output mode
