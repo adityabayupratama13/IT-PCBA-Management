@@ -1,27 +1,257 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   DESIGN SYSTEM: PREMIUM BLUE THEME
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Blue-based Light Mode */
+  --background:        #F0F4FF;
+  --surface:           #FFFFFF;
+  --surface-2:         #E8EFFE;
+  --foreground:        #0D1B3E;
+  --border:            #C8D6F5;
+  --muted:             #EEF2FF;
+  --muted-foreground:  #6B7BAD;
+
+  /* Brand Colors */
+  --primary:           #2563EB;
+  --primary-light:     #3B82F6;
+  --primary-foreground:#FFFFFF;
+  --secondary:         #7C3AED;
+  --secondary-foreground: #FFFFFF;
+  --accent:            #0EA5E9;
+
+  /* Semantic */
+  --success:           #10B981;
+  --success-foreground:#FFFFFF;
+  --destructive:       #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --warning:           #F59E0B;
+
+  /* Sidebar */
+  --sidebar-bg:        #FFFFFF;
+  --sidebar-active:    #EEF2FF;
+  --sidebar-border:    #E2EAFD;
+
+  /* Card gradient */
+  --card-gradient: linear-gradient(135deg, #FFFFFF 0%, #F0F4FF 100%);
+
+  /* Glow */
+  --primary-glow: rgba(37, 99, 235, 0.15);
+  --secondary-glow: rgba(124, 58, 237, 0.15);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  /* Deep Navy Dark Mode */
+  --background:        #060D1F;
+  --surface:           #0D1B3E;
+  --surface-2:         #112055;
+  --foreground:        #E8EFFE;
+  --border:            #1E3A6E;
+  --muted:             #0F1E45;
+  --muted-foreground:  #7A9BD4;
+
+  /* Brand Colors */
+  --primary:           #3B82F6;
+  --primary-light:     #60A5FA;
+  --primary-foreground:#FFFFFF;
+  --secondary:         #8B5CF6;
+  --secondary-foreground: #FFFFFF;
+  --accent:            #38BDF8;
+
+  /* Semantic */
+  --success:           #10B981;
+  --success-foreground:#FFFFFF;
+  --destructive:       #F87171;
+  --destructive-foreground: #FFFFFF;
+  --warning:           #FBBF24;
+
+  /* Sidebar */
+  --sidebar-bg:        #0A1628;
+  --sidebar-active:    #112055;
+  --sidebar-border:    #1E3A6E;
+
+  /* Card gradient */
+  --card-gradient: linear-gradient(135deg, #0D1B3E 0%, #0A1628 100%);
+
+  /* Glow */
+  --primary-glow: rgba(59, 130, 246, 0.2);
+  --secondary-glow: rgba(139, 92, 246 , 0.2);
 }
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+* { box-sizing: border-box; }
 
 body {
+  background-color: var(--background);
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.2s ease;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+.custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 99px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* ============================================================
+   GLASSMORPHISM UTILITIES
+   ============================================================ */
+.glass {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.dark .glass {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Light mode glass */
+:not(.dark) .glass {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(37, 99, 235, 0.15);
+}
+
+/* ============================================================
+   CARD STYLES
+   ============================================================ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  transition: all 0.2s ease;
+}
+.card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary-glow), 0 8px 32px var(--primary-glow);
+}
+
+/* ============================================================
+   BLUE GLOW EFFECT
+   ============================================================ */
+.glow-blue {
+  box-shadow: 0 0 20px var(--primary-glow), 0 0 60px var(--primary-glow);
+}
+.glow-text {
+  text-shadow: 0 0 20px var(--primary-glow);
+}
+
+/* ============================================================
+   GRADIENT UTILITIES
+   ============================================================ */
+.gradient-text {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-border {
+  position: relative;
+  background: var(--surface);
+  border-radius: 16px;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ============================================================
+   ANIMATED BACKGROUND GRID (DARK MODE)
+   ============================================================ */
+.dark .bg-grid {
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ============================================================
+   FORM ELEMENTS
+   ============================================================ */
+input, select, textarea {
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+/* ============================================================
+   SIDEBAR ACTIVE INDICATOR ANIMATION
+   ============================================================ */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ============================================================
+   SMOOTH THEME TRANSITIONS
+   ============================================================ */
+*, *::before, *::after {
+  transition-property: background-color, border-color;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+/* Exclude transitions that should be instant */
+button, a, input, select, textarea, [role="button"] {
+  transition-property: background-color, border-color, color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+}
+
+/* ============================================================
+   RECHARTS OVERRIDES
+   ============================================================ */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: var(--border);
+  stroke-opacity: 0.5;
+}
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  color: var(--foreground) !important;
+}
+.recharts-text {
+  fill: var(--muted-foreground) !important;
+}
+
+/* ============================================================
+   STATUS INDICATOR PULSE
+   ============================================================ */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.8); }
+}
+.status-online {
+  animation: status-pulse 2s ease-in-out infinite;
 }
