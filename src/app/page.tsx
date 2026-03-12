@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Users, Ticket, CheckSquare, Package, Activity, Clock, PieChart, BarChart3 } from 'lucide-react';
+import { Users, Ticket, CheckSquare, Activity, Clock, BarChart3 } from 'lucide-react';
 import { StatCard } from '@/components/StatCard';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  LineChart, Line, PieChart as RechartsPieChart, Pie, Cell, Legend
+  LineChart, Line
 } from 'recharts';
 import { format, subDays } from 'date-fns';
 
@@ -16,13 +16,7 @@ const generateData = (days: number) =>
     resolutionTime: Math.floor(Math.random() * 48) + 12,
   }));
 
-const ASSET_DATA = [
-  { name: 'Laptops', value: 45 },
-  { name: 'Monitors', value: 30 },
-  { name: 'Servers', value: 10 },
-  { name: 'Phones', value: 15 },
-];
-const ASSET_COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B'];
+
 
 const WORKLOAD_DATA = [
   { name: 'Adi', tasks: 12 },
@@ -83,7 +77,6 @@ export default function Dashboard() {
       { title: 'Total Members',  value: 5, icon: <Users className="w-5 h-5" />, trend: { value: 0, isUp: true }, accent: 'blue' as const },
       { title: 'Open Tickets',   value: Math.ceil(3 * m), icon: <Ticket className="w-5 h-5" />, trend: { value: Math.ceil(12 * m), isUp: false }, accent: 'violet' as const },
       { title: 'Active Tasks',   value: Math.ceil(8 * m), icon: <CheckSquare className="w-5 h-5" />, trend: { value: Math.ceil(5 * m), isUp: true }, accent: 'emerald' as const },
-      { title: 'Total Assets',   value: Math.ceil(15 * m), icon: <Package className="w-5 h-5" />, trend: { value: Math.ceil(2 * m), isUp: true }, accent: 'amber' as const },
     ];
   }, [dateRange]);
 
@@ -124,7 +117,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div id="dashboard-stats" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div id="dashboard-stats" className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {stats.map((stat, i) => (
           <StatCard key={i} {...stat} />
         ))}
@@ -166,27 +159,7 @@ export default function Dashboard() {
       </div>
 
       {/* Charts Row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Asset Pie */}
-        <ChartCard title="Asset Distribution" icon={<PieChart className="w-4 h-4 text-emerald-500" />}>
-          <div className="h-56 relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <RechartsPieChart>
-                <Pie data={ASSET_DATA} cx="50%" cy="45%" innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="value">
-                  {ASSET_DATA.map((_, index) => (
-                    <Cell key={index} fill={ASSET_COLORS[index % ASSET_COLORS.length]} strokeWidth={0} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={tooltipStyle} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '11px', color: 'var(--muted-foreground)' }} />
-              </RechartsPieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-10">
-              <span className="text-2xl font-bold text-foreground">100</span>
-              <span className="text-xs text-muted-foreground">Total Units</span>
-            </div>
-          </div>
-        </ChartCard>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         {/* Team Workload */}
         <ChartCard title="Team Workload" icon={<BarChart3 className="w-4 h-4 text-amber-500" />}>

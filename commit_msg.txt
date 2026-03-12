@@ -1,6 +1,6 @@
-feat: add Docker support
+feat: remove Total Assets from dashboard
 
-- Dockerfile with 3-stage build (deps, builder, runner)
-- docker-compose.yml mapping port 3003
-- .dockerignore for fast build context
-- next.config.mjs with standalone output mode
+- Remove Total Assets stat card (handled by external app)
+- Remove Asset Distribution pie chart
+- Change stat cards grid to 3 columns
+- Remove unused imports and constants
