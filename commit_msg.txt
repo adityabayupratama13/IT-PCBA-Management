@@ -1,6 +1,0 @@
-feat: remove Total Assets from dashboard
-
-- Remove Total Assets stat card (handled by external app)
-- Remove Asset Distribution pie chart
-- Change stat cards grid to 3 columns
-- Remove unused imports and constants
