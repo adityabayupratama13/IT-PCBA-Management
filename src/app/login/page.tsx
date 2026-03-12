@@ -1,66 +1,153 @@
 'use client';
+import { useState } from 'react';
+import { Shield, Eye, EyeOff, AlertCircle, IdCard } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, User, Shield } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function LoginPage() {
+  const [name, setName]         = useState('');
+  const [badge, setBadge]       = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw]     = useState(false);
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
+
   const { login } = useAuth();
   const router = useRouter();
 
-  const handleLogin = (email: string, role: 'Admin' | 'Member') => {
-    login(email, role);
-    router.push('/');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    await new Promise(r => setTimeout(r, 600)); // slight delay for UX
+
+    const ok = login(name, badge, password);
+    if (ok) {
+      toast.success(`Welcome, ${name}!`);
+      router.push('/');
+    } else {
+      setError('Name, Badge Number, or Password is incorrect. Please try again.');
+    }
+    setLoading(false);
   };
 
+  const inputClass = `w-full rounded-xl px-4 py-3 text-sm text-foreground border transition-all focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary`;
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-background p-4 relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-[128px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/20 rounded-full blur-[128px] pointer-events-none" />
-      
-      <div className="w-full max-w-md bg-white dark:bg-surface border border-border rounded-2xl p-8 shadow-2xl relative z-10">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 text-primary mb-4 border border-primary/20 shadow-[0_0_30px_rgba(59,130,246,0.2)]">
-            <ShieldAlert className="w-8 h-8" />
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--background)' }}>
+      {/* Background glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full blur-[120px] opacity-20"
+          style={{ background: 'radial-gradient(circle, var(--primary) 0%, transparent 70%)' }} />
+      </div>
+
+      <div className="w-full max-w-md relative">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto mb-4 shadow-glow-blue">
+            <Shield className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome Back</h1>
-          <p className="text-muted-foreground mt-2">Sign in to IT Management Dashboard</p>
+          <h1 className="text-2xl font-bold text-foreground">IT PCBA Management</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Sign in with your IT credentials</p>
         </div>
 
-        <div className="space-y-4">
-          <div className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Demo Accounts</div>
-          
-          <button 
-            onClick={() => handleLogin('admin@giken.com', 'Admin')}
-            className="w-full flex items-center justify-between p-4 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-2 bg-primary/20 rounded-lg text-primary">
-                <Shield className="w-5 h-5" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold text-foreground group-hover:text-primary transition-colors">Admin Access</div>
-                <div className="text-xs text-muted-foreground">admin@giken.com</div>
-              </div>
+        {/* Card */}
+        <div className="rounded-2xl p-8 border shadow-card-hover"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        >
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Name */}
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2">Full Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Aditya Bayu Pratama"
+                required
+                autoFocus
+                className={inputClass}
+                style={{ background: 'var(--muted)', borderColor: 'var(--border)' }}
+              />
             </div>
-            <div className="text-xs font-mono bg-gray-100 dark:bg-background border border-border px-2 py-1 rounded text-muted-foreground">admin123</div>
-          </button>
 
-          <button 
-            onClick={() => handleLogin('member@giken.com', 'Member')}
-            className="w-full flex items-center justify-between p-4 rounded-xl border border-border bg-gray-50 dark:bg-background hover:bg-gray-100 dark:hover:bg-white/5 transition-all group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="p-2 bg-gray-100 dark:bg-surface border border-border text-muted-foreground rounded-lg group-hover:text-foreground transition-colors">
-                <User className="w-5 h-5" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold text-foreground">Member Access</div>
-                <div className="text-xs text-muted-foreground">member@giken.com</div>
+            {/* Badge Number */}
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                <IdCard className="w-3.5 h-3.5" />
+                Badge Number
+              </label>
+              <input
+                type="text"
+                value={badge}
+                onChange={e => setBadge(e.target.value)}
+                placeholder="e.g. 36443"
+                required
+                className={inputClass}
+                style={{ background: 'var(--muted)', borderColor: 'var(--border)' }}
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2">Password</label>
+              <div className="relative">
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  className={`${inputClass} pr-11`}
+                  style={{ background: 'var(--muted)', borderColor: 'var(--border)' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw(!showPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
-            <div className="text-xs font-mono bg-gray-100 dark:bg-surface border border-border px-2 py-1 rounded text-muted-foreground">member123</div>
-          </button>
+
+            {/* Error */}
+            {error && (
+              <div className="flex items-start gap-2.5 p-3 rounded-xl border text-sm"
+                style={{ background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)', color: 'var(--destructive)' }}
+              >
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 rounded-xl font-semibold text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.98] shadow-glow-sm"
+              style={{ background: 'linear-gradient(135deg, var(--primary), var(--secondary))' }}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Signing in...
+                </span>
+              ) : 'Sign In'}
+            </button>
+          </form>
         </div>
+
+        {/* Footer note */}
+        <p className="text-center text-xs text-muted-foreground mt-6">
+          Access restricted to registered IT Department members only.
+          <br />Contact your IT Leader if you need an account.
+        </p>
       </div>
     </div>
   );

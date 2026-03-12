@@ -11,7 +11,7 @@ interface HeaderProps {
 
 export function Header({ className = '', onMenuClick }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
-  const { userEmail, role, logout, auditLogs } = useAuth();
+  const { currentUser, isMaster, logout, auditLogs } = useAuth();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   
@@ -142,14 +142,15 @@ export function Header({ className = '', onMenuClick }: HeaderProps) {
         {/* User Profile */}
         <div id="tour-role" className="flex items-center gap-2.5">
           <div className="hidden sm:block text-right">
-            <div className="text-sm font-semibold text-foreground leading-none">{userEmail?.split('@')[0] || 'Guest'}</div>
+            <div className="text-sm font-semibold text-foreground leading-none">{currentUser?.name || 'Guest'}</div>
             <div className="text-xs text-muted-foreground mt-0.5 flex items-center justify-end gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${role === 'Admin' ? 'bg-primary' : 'bg-success'}`} />
-              {role}
+              <span className={`w-1.5 h-1.5 rounded-full ${isMaster ? 'bg-primary' : 'bg-success'}`} />
+              {isMaster ? 'Master' : currentUser?.role || ''}
+              {currentUser?.badge && <code className="font-mono text-[10px] opacity-60">#{currentUser.badge}</code>}
             </div>
           </div>
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold text-sm">
-            {userEmail ? userEmail.charAt(0).toUpperCase() : '?'}
+            {currentUser?.name.charAt(0).toUpperCase() || '?'}
           </div>
           <button
             onClick={logout}
