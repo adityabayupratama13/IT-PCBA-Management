@@ -9,7 +9,7 @@ interface Column<T> {
 interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
-  keyExtractor: (item: T) => string | number;
+  keyExtractor?: (item: T) => string | number;
 }
 
 export function DataTable<T>({ columns, data, keyExtractor }: DataTableProps<T>) {
@@ -39,8 +39,8 @@ export function DataTable<T>({ columns, data, keyExtractor }: DataTableProps<T>)
             </tr>
           </thead>
           <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
-            {data.map((item) => (
-              <tr key={keyExtractor(item)}
+            {data.map((item, idx) => (
+              <tr key={keyExtractor ? keyExtractor(item) : idx}
                 className="transition-colors group"
                 style={{}}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--muted)')}

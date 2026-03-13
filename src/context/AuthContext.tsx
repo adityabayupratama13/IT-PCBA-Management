@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 export interface Member {
   id: number;
@@ -9,20 +9,22 @@ export interface Member {
   password: string;
   role: string;
   division: string;
-  status: 'Active' | 'Inactive';
-  joinDate: string;
+  email?: string;
+  phone?: string;
+  status: string;
+  created_at?: string;
 }
 
 export interface AuditLog {
-  id: string;
-  timestamp: string;
-  user: string;
-  action: 'Created' | 'Updated' | 'Deleted' | 'Exported' | 'Logged In';
+  id: number;
+  action: string;
   module: string;
   details: string;
+  user_name: string;
+  timestamp: string;
 }
 
-// Master account — can register/manage all members
+// Master account — hardcoded fallback for initial access
 export const MASTER_ACCOUNT: Member = {
   id: 0,
   name: 'Aditya Bayu Pratama',
@@ -31,27 +33,20 @@ export const MASTER_ACCOUNT: Member = {
   role: 'IT Leader',
   division: 'Management',
   status: 'Active',
-  joinDate: '2023-01-01',
 };
-
-const DEFAULT_MEMBERS: Member[] = [
-  { id: 1, name: 'Budi',  badge: '36001', password: 'Budi@2024',  role: 'Software Engineer', division: 'Development',    status: 'Active',   joinDate: '2023-03-20' },
-  { id: 2, name: 'Citra', badge: '36002', password: 'Citra@2024', role: 'Network Admin',      division: 'Infrastructure', status: 'Active',   joinDate: '2023-06-10' },
-  { id: 3, name: 'Deni',  badge: '36003', password: 'Deni@2024',  role: 'IT Support',         division: 'Helpdesk',       status: 'Inactive', joinDate: '2024-01-05' },
-  { id: 4, name: 'Eka',   badge: '36004', password: 'Eka@2024',   role: 'IT Support',         division: 'Helpdesk',       status: 'Active',   joinDate: '2024-02-12' },
-];
 
 interface AuthContextType {
   currentUser: Member | null;
   isMaster: boolean;
   members: Member[];
-  login: (badge: string, password: string) => boolean;
+  login: (badge: string, password: string) => Promise<boolean>;
   logout: () => void;
-  addMember: (member: Omit<Member, 'id'>) => void;
-  updateMember: (member: Member) => void;
-  deleteMember: (id: number) => void;
+  addMember: (member: Omit<Member, 'id'>) => Promise<void>;
+  updateMember: (member: Member) => Promise<void>;
+  deleteMember: (id: number) => Promise<void>;
+  refreshMembers: () => Promise<void>;
   auditLogs: AuditLog[];
-  addAuditLog: (action: AuditLog['action'], module: string, details: string) => void;
+  addAuditLog: (action: string, module: string, details: string) => void;
   // Legacy compat
   role: string | null;
   userEmail: string | null;
@@ -61,79 +56,78 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<Member | null>(null);
-  const [members, setMembers] = useState<Member[]>(DEFAULT_MEMBERS);
+  const [members, setMembers] = useState<Member[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [isMounted, setIsMounted] = useState(false);
-
   useEffect(() => {
-    setIsMounted(true);
-    // Load persisted auth
+    // Restore session from localStorage
     const stored = localStorage.getItem('it-mgt-user');
     if (stored) {
       try { setCurrentUser(JSON.parse(stored)); } catch { /* ignore */ }
     }
-    // Load members
-    const storedMembers = localStorage.getItem('it-mgt-members');
-    if (storedMembers) {
-      try { setMembers(JSON.parse(storedMembers)); } catch { /* ignore */ }
-    }
-    // Load audit logs
-    const storedLogs = localStorage.getItem('it-mgt-audit');
-    if (storedLogs) {
-      try { setAuditLogs(JSON.parse(storedLogs)); } catch { /* ignore */ }
-    }
+    // Fetch members from API
+    fetchMembers();
+    // Fetch audit logs from API
+    fetchAuditLogs();
   }, []);
 
-  useEffect(() => {
-    if (!isMounted) return;
-    localStorage.setItem('it-mgt-audit', JSON.stringify(auditLogs));
-  }, [auditLogs, isMounted]);
+  const fetchMembers = async () => {
+    try {
+      const res = await fetch('/api/members');
+      if (res.ok) {
+        const data = await res.json();
+        setMembers(data);
+      }
+    } catch { /* silent — will use empty array */ }
+  };
 
-  useEffect(() => {
-    if (!isMounted) return;
-    localStorage.setItem('it-mgt-members', JSON.stringify(members));
-  }, [members, isMounted]);
+  const fetchAuditLogs = async () => {
+    try {
+      const res = await fetch('/api/audit');
+      if (res.ok) {
+        const data = await res.json();
+        setAuditLogs(data);
+      }
+    } catch { /* silent */ }
+  };
 
-  const login = (badge: string, password: string): boolean => {
-    // Check master account
-    if (
-      badge.trim() === MASTER_ACCOUNT.badge &&
-      password === MASTER_ACCOUNT.password
-    ) {
+  const refreshMembers = useCallback(async () => {
+    await fetchMembers();
+  }, []);
+
+  const login = async (badge: string, password: string): Promise<boolean> => {
+    // Check master account first (hardcoded)
+    if (badge.trim() === MASTER_ACCOUNT.badge && password === MASTER_ACCOUNT.password) {
       setCurrentUser(MASTER_ACCOUNT);
       localStorage.setItem('it-mgt-user', JSON.stringify(MASTER_ACCOUNT));
-      const log: AuditLog = {
-        id: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        user: MASTER_ACCOUNT.name,
-        action: 'Logged In',
-        module: 'Authentication',
-        details: `Master login: ${MASTER_ACCOUNT.name} (Badge: ${MASTER_ACCOUNT.badge})`,
-      };
-      setAuditLogs(prev => [log, ...prev]);
+      // Log to DB
+      try {
+        await fetch('/api/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login', badge: 'ABP001', password: 'Passw0rd!' }),
+        });
+      } catch { /* silent */ }
       return true;
     }
-    // Check registered members
-    const found = members.find(
-      m =>
-        m.badge.trim() === badge.trim() &&
-        m.password === password &&
-        m.status === 'Active'
-    );
-    if (found) {
-      setCurrentUser(found);
-      localStorage.setItem('it-mgt-user', JSON.stringify(found));
-      const log: AuditLog = {
-        id: Date.now().toString(),
-        timestamp: new Date().toISOString(),
-        user: found.name,
-        action: 'Logged In',
-        module: 'Authentication',
-        details: `Login: ${found.name} (Badge: ${found.badge})`,
-      };
-      setAuditLogs(prev => [log, ...prev]);
-      return true;
-    }
+
+    // Try API login (checks DB members)
+    try {
+      const res = await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', badge: badge.trim(), password }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.member) {
+          const member: Member = data.member;
+          setCurrentUser(member);
+          localStorage.setItem('it-mgt-user', JSON.stringify(member));
+          return true;
+        }
+      }
+    } catch { /* fall through */ }
+
     return false;
   };
 
@@ -142,42 +136,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('it-mgt-user');
   };
 
-  const addMember = (member: Omit<Member, 'id'>) => {
-    const newMember: Member = { ...member, id: Date.now() };
-    setMembers(prev => [...prev, newMember]);
-    addAuditLog('Created', 'Team', `Registered member: ${newMember.name} (Badge: ${newMember.badge})`);
-  };
-
-  const updateMember = (member: Member) => {
-    setMembers(prev => prev.map(m => (m.id === member.id ? member : m)));
-    // If currently logged-in user was updated, refresh session
-    if (currentUser?.id === member.id) {
-      setCurrentUser(member);
-      localStorage.setItem('it-mgt-user', JSON.stringify(member));
+  const addMember = async (member: Omit<Member, 'id'>) => {
+    try {
+      const res = await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...member, userName: currentUser?.name }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to add member');
+      }
+      await fetchMembers();
+      await fetchAuditLogs();
+    } catch (err) {
+      throw err;
     }
-    addAuditLog('Updated', 'Team', `Updated member: ${member.name} (Badge: ${member.badge})`);
   };
 
-  const deleteMember = (id: number) => {
-    const m = members.find(m => m.id === id);
-    setMembers(prev => prev.filter(m => m.id !== id));
-    if (m) addAuditLog('Deleted', 'Team', `Deleted member: ${m.name} (Badge: ${m.badge})`);
+  const updateMember = async (member: Member) => {
+    try {
+      await fetch('/api/members', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...member, userName: currentUser?.name }),
+      });
+      await fetchMembers();
+      await fetchAuditLogs();
+      // If currently logged-in user was updated, refresh session
+      if (currentUser?.id === member.id) {
+        setCurrentUser(member);
+        localStorage.setItem('it-mgt-user', JSON.stringify(member));
+      }
+    } catch { /* silent */ }
   };
 
-  const addAuditLog = (action: AuditLog['action'], module: string, details: string) => {
-    if (!currentUser) return;
+  const deleteMember = async (id: number) => {
+    try {
+      await fetch(`/api/members?id=${id}`, { method: 'DELETE' });
+      await fetchMembers();
+      await fetchAuditLogs();
+    } catch { /* silent */ }
+  };
+
+  const addAuditLog = (action: string, module: string, details: string) => {
+    // Fire and forget to API
+    fetch('/api/audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, module, details, userName: currentUser?.name || 'System' }),
+    }).catch(() => {});
+    // Optimistic local update
     const log: AuditLog = {
-      id: Date.now().toString(),
-      timestamp: new Date().toISOString(),
-      user: currentUser.name,
+      id: Date.now(),
       action,
       module,
       details,
+      user_name: currentUser?.name || 'System',
+      timestamp: new Date().toISOString(),
     };
     setAuditLogs(prev => [log, ...prev]);
   };
 
-  const isMaster = currentUser?.id === MASTER_ACCOUNT.id;
+  const isMaster = currentUser?.id === MASTER_ACCOUNT.id || currentUser?.badge === MASTER_ACCOUNT.badge;
 
   return (
     <AuthContext.Provider value={{
@@ -189,9 +210,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       addMember,
       updateMember,
       deleteMember,
+      refreshMembers,
       auditLogs,
       addAuditLog,
-      // Legacy compat for other pages
       role: currentUser ? (isMaster ? 'Master' : 'Member') : null,
       userEmail: currentUser?.name ?? null,
     }}>

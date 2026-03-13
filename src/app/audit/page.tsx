@@ -26,7 +26,7 @@ export default function AuditLogPage() {
 
   const filteredLogs = auditLogs.filter(log => {
     const matchesSearch = log.details.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          log.user.toLowerCase().includes(searchTerm.toLowerCase());
+                          log.user_name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesModule = filterModule === 'All' || log.module === filterModule;
     return matchesSearch && matchesModule;
   });
@@ -108,9 +108,9 @@ export default function AuditLogPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary text-[10px] font-bold">
-                          {log.user.charAt(0).toUpperCase()}
+                          {(log.user_name || 'S').charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-foreground">{log.user.split('@')[0]}</span>
+                        <span className="text-foreground">{(log.user_name || '').split('@')[0]}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">

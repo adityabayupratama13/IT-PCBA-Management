@@ -5,7 +5,7 @@ import { Modal, ConfirmDialog } from '@/components/Modal';
 import { addDays, startOfWeek, format, getDaysInMonth, startOfMonth, getDay } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { usePersistedState } from '@/context/usePersistedState';
+import { useApi } from '@/hooks/useApi';
 
 type ScheduleType = 'Meeting' | 'Maintenance' | 'On-Call';
 type Recurrence = 'once' | 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -25,29 +25,25 @@ interface ScheduleItem {
   assignee: string;
 }
 
-const INITIAL_SCHEDULES: ScheduleItem[] = [
-  { id: 1, title: 'Server Maintenance', type: 'Maintenance', recurrence: 'weekly', day: 1, date: '', dayOfMonth: 0, monthOfYear: 0, startTime: '22:00', endTime: '02:00', assignee: 'Citra' },
-  { id: 2, title: 'Weekly IT Sync', type: 'Meeting', recurrence: 'weekly', day: 1, date: '', dayOfMonth: 0, monthOfYear: 0, startTime: '10:00', endTime: '11:00', assignee: 'All Team' },
-  { id: 3, title: 'On-Call Support', type: 'On-Call', recurrence: 'weekly', day: 2, date: '', dayOfMonth: 0, monthOfYear: 0, startTime: '08:00', endTime: '17:00', assignee: 'Budi' },
-  { id: 4, title: 'Network Upgrades', type: 'Maintenance', recurrence: 'weekly', day: 4, date: '', dayOfMonth: 0, monthOfYear: 0, startTime: '21:00', endTime: '23:00', assignee: 'Adi' },
-  { id: 5, title: 'Security Review', type: 'Meeting', recurrence: 'weekly', day: 3, date: '', dayOfMonth: 0, monthOfYear: 0, startTime: '14:00', endTime: '15:30', assignee: 'Adi, Citra' },
-  { id: 6, title: 'On-Call Support', type: 'On-Call', recurrence: 'weekly', day: 5, date: '', dayOfMonth: 0, monthOfYear: 0, startTime: '08:00', endTime: '17:00', assignee: 'Eka' },
-  { id: 7, title: 'ERP Vendor Sync', type: 'Meeting', recurrence: 'weekly', day: 4, date: '', dayOfMonth: 0, monthOfYear: 0, startTime: '13:00', endTime: '14:00', assignee: 'Budi' },
-];
+
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+interface DbSchedule { id: number; title: string; type: string; recurrence: string; day: number; date: string; day_of_month: number; month_of_year: number; start_time: string; end_time: string; assignee: string; }
+const mapFromDb = (s: DbSchedule): ScheduleItem => ({ id: s.id, title: s.title, type: s.type as ScheduleType, recurrence: s.recurrence as Recurrence, day: s.day, date: s.date, dayOfMonth: s.day_of_month, monthOfYear: s.month_of_year, startTime: s.start_time, endTime: s.end_time, assignee: s.assignee });
+
 export default function SchedulePage() {
-  const [schedules, setSchedules] = usePersistedState<ScheduleItem[]>('it-schedules', INITIAL_SCHEDULES);
+  const { data: rawSchedules, create, update: apiUpdate, remove } = useApi<DbSchedule>('schedules');
+  const schedules = rawSchedules.map(mapFromDb);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<ScheduleItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ScheduleItem | null>(null);
   const [formRecurrence, setFormRecurrence] = useState<Recurrence>('weekly');
-  const { addAuditLog } = useAuth();
+  const { currentUser } = useAuth();
 
   // ─── Week helpers ───
   const getWeekRange = () => {
@@ -114,22 +110,20 @@ export default function SchedulePage() {
   const openAddModal = () => { setEditingSchedule(null); setFormRecurrence('weekly'); setIsModalOpen(true); };
   const openEditModal = (s: ScheduleItem) => { setEditingSchedule(s); setFormRecurrence(s.recurrence); setIsModalOpen(true); };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    setSchedules(schedules.filter(s => s.id !== deleteTarget.id));
-    addAuditLog('Deleted', 'Schedule', `Deleted schedule: ${deleteTarget.title}`);
+    await remove(deleteTarget.id);
     toast.success(`Schedule "${deleteTarget.title}" deleted`);
     setDeleteTarget(null);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
     const rec = fd.get('recurrence') as Recurrence;
-    const newSchedule: ScheduleItem = {
-      id: editingSchedule ? editingSchedule.id : Date.now(),
+    const payload = {
       title: fd.get('title') as string,
-      type: fd.get('type') as ScheduleType,
+      type: fd.get('type') as string,
       recurrence: rec,
       day: rec === 'weekly' ? Number(fd.get('day')) : 0,
       date: rec === 'once' ? (fd.get('date') as string) : '',
@@ -138,15 +132,14 @@ export default function SchedulePage() {
       startTime: fd.get('startTime') as string,
       endTime: fd.get('endTime') as string,
       assignee: fd.get('assignee') as string,
+      userName: currentUser?.name || 'System',
     };
     if (editingSchedule) {
-      setSchedules(schedules.map(s => (s.id === editingSchedule.id ? newSchedule : s)));
-      addAuditLog('Updated', 'Schedule', `Updated schedule: ${newSchedule.title}`);
-      toast.success(`Schedule "${newSchedule.title}" updated`);
+      await apiUpdate({ id: editingSchedule.id, ...payload } as unknown as DbSchedule & Record<string, unknown>);
+      toast.success(`Schedule "${payload.title}" updated`);
     } else {
-      setSchedules([...schedules, newSchedule]);
-      addAuditLog('Created', 'Schedule', `Created schedule: ${newSchedule.title}`);
-      toast.success(`Schedule "${newSchedule.title}" created`);
+      await create(payload as unknown as Partial<DbSchedule> & Record<string, unknown>);
+      toast.success(`Schedule "${payload.title}" created`);
     }
     setIsModalOpen(false);
   };

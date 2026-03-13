@@ -86,7 +86,7 @@ export default function TeamPage() {
       role:     fd.get('role') as string,
       division: fd.get('division') as string,
       status:   fd.get('status') as 'Active' | 'Inactive',
-      joinDate: fd.get('joinDate') as string || new Date().toISOString().split('T')[0],
+
     };
 
     // Check duplicate badge
@@ -162,7 +162,7 @@ export default function TeamPage() {
         </span>
       )
     },
-    { header: 'Join Date', accessor: 'joinDate' as keyof Member },
+    { header: 'Joined', accessor: (m: Member) => (m.created_at ? new Date(m.created_at).toLocaleDateString() : '—') },
     {
       header: 'Actions',
       accessor: (m: Member) => isMasterRecord(m) ? (
@@ -286,7 +286,7 @@ export default function TeamPage() {
 
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Join Date</label>
-            <input name="joinDate" type="date" defaultValue={editingMember?.joinDate || new Date().toISOString().split('T')[0]}
+            <input name="joinDate" type="date" defaultValue={editingMember?.created_at?.split('T')[0] || new Date().toISOString().split('T')[0]}
               className={inputClass} style={inputStyle} />
           </div>
 

@@ -22,7 +22,7 @@ export default function LoginPage() {
 
     await new Promise(r => setTimeout(r, 600)); // slight delay for UX
 
-    const ok = login(badge, password);
+    const ok = await login(badge, password);
     if (ok) {
       toast.success('Welcome back!');
       window.location.href = '/';

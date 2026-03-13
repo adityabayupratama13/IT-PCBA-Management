@@ -45,9 +45,11 @@ services:
     volumes:
       - "C:\\Users\\SERVER\\Downloads\\IT:/app"
       - /app/node_modules
+      - it-db-data:/data
     environment:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
+      - DB_PATH=/data
     ports:
       - "3002:3002"
     restart: unless-stopped
@@ -111,3 +113,4 @@ networks:
 
 volumes:
   mysql-data:
+  it-db-data:

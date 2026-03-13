@@ -5,31 +5,26 @@ import { DataTable } from '@/components/DataTable';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { usePersistedState } from '@/context/usePersistedState';
+import { useApi } from '@/hooks/useApi';
 
-const INITIAL_TICKETS = [
-  { id: 'TKT-104', title: 'Network down in meeting room A', reporter: 'Sales Director', priority: 'Critical', status: 'Open', createdDate: '2026-03-11T14:30' },
-  { id: 'TKT-103', title: 'Cannot access ERP system', reporter: 'Finance Manager', priority: 'High', status: 'In Progress', createdDate: '2026-03-11T10:15' },
-  { id: 'TKT-102', title: 'Request new monitor setup', reporter: 'HR Team', priority: 'Low', status: 'Resolved', createdDate: '2026-03-10T16:45' },
-  { id: 'TKT-101', title: 'Printer ink replacement on 2nd floor', reporter: 'Admin Office', priority: 'Medium', status: 'Closed', createdDate: '2026-03-09T09:20' },
-  { id: 'TKT-100', title: 'Laptop blue screen issue', reporter: 'Marketing Staff', priority: 'High', status: 'In Progress', createdDate: '2026-03-08T11:00' },
-  { id: 'TKT-099', title: 'Update software license', reporter: 'Engineering Dept', priority: 'Low', status: 'Closed', createdDate: '2026-03-05T14:10' },
-  { id: 'TKT-098', title: 'Wi-Fi slow connection', reporter: 'Warehouse Team', priority: 'Medium', status: 'Open', createdDate: '2026-03-11T08:05' },
-  { id: 'TKT-097', title: 'New onboarding account creation', reporter: 'HR Team', priority: 'Medium', status: 'Open', createdDate: '2026-03-11T15:22' },
-];
-
-type Ticket = typeof INITIAL_TICKETS[0];
+interface Ticket {
+  id: string;
+  title: string;
+  reporter: string;
+  priority: string;
+  status: string;
+  created_date: string;
+}
 
 export default function TicketsPage() {
-  const [tickets, setTickets] = usePersistedState('it-tickets', INITIAL_TICKETS);
+  const { data: tickets, loading, create, update, remove } = useApi<Ticket>('tickets');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ticket | null>(null);
-  const [isAddMode, setIsAddMode] = useState(false);
-  const { addAuditLog, currentUser } = useAuth();
+  const { currentUser } = useAuth();
 
   const filteredTickets = tickets.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase());
@@ -38,269 +33,149 @@ export default function TicketsPage() {
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
-  const openEditModal = (ticket: Ticket) => {
-    setEditingTicket(ticket);
-    setIsAddMode(false);
-    setIsModalOpen(true);
-  };
+  const openAddModal = () => { setEditingTicket(null); setIsModalOpen(true); };
+  const openEditModal = (ticket: Ticket) => { setEditingTicket(ticket); setIsModalOpen(true); };
 
-  const openAddModal = () => {
-    setEditingTicket(null);
-    setIsAddMode(true);
-    setIsModalOpen(true);
-  };
-
-  // Helper: auto-add entry to Daily Log when ticket changes
-  const addTicketToDailyLog = (action: string, ticketId: string, ticketTitle: string) => {
-    try {
-      const stored = localStorage.getItem('it-daily-logs');
-      const logs = stored ? JSON.parse(stored) : [];
-      const entry = {
-        id: Date.now() + Math.random(),
-        date: new Date().toISOString().split('T')[0],
-        member: currentUser?.name || 'System',
-        activity: `[Ticket ${action}] ${ticketId} — ${ticketTitle}`,
-        hours: 0,
-        location: 'System',
-        source: 'ticket' as const,
-      };
-      const updated = [entry, ...logs];
-      localStorage.setItem('it-daily-logs', JSON.stringify(updated));
-    } catch { /* ignore */ }
-  };
-
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    setTickets(tickets.filter(t => t.id !== deleteTarget.id));
-    addAuditLog('Deleted', 'Tickets', `Deleted ticket: ${deleteTarget.id} - ${deleteTarget.title}`);
-    addTicketToDailyLog('Deleted', deleteTarget.id, deleteTarget.title);
+    await remove(deleteTarget.id);
     toast.success(`Ticket ${deleteTarget.id} deleted`);
     setDeleteTarget(null);
   };
 
-  const handleInlineStatusChange = (ticketId: string, newStatus: string) => {
+  const handleInlineStatusChange = async (ticketId: string, newStatus: string) => {
     const ticket = tickets.find(t => t.id === ticketId);
-    setTickets(tickets.map(t => t.id === ticketId ? { ...t, status: newStatus } : t));
-    addAuditLog('Updated', 'Tickets', `Updated ticket ${ticketId} status to ${newStatus}`);
-    addTicketToDailyLog(`Status → ${newStatus}`, ticketId, ticket?.title || '');
+    if (!ticket) return;
+    await update({ ...ticket, status: newStatus, userName: currentUser?.name } as unknown as Ticket & Record<string, unknown>);
     toast.success(`Ticket ${ticketId} status changed to ${newStatus}`);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    const newTicket = {
-      id: editingTicket ? editingTicket.id : `TKT-${String(tickets.length + 100).padStart(3, '0')}`,
+    const payload = {
       title: formData.get('title') as string,
       reporter: formData.get('reporter') as string,
       priority: formData.get('priority') as string,
       status: formData.get('status') as string,
-      createdDate: editingTicket ? editingTicket.createdDate : new Date().toISOString(),
+      userName: currentUser?.name || 'System',
     };
-
     if (editingTicket) {
-      setTickets(tickets.map(t => (t.id === editingTicket.id ? newTicket : t)));
-      addAuditLog('Updated', 'Tickets', `Updated ticket: ${newTicket.id}`);
-      addTicketToDailyLog('Updated', newTicket.id, newTicket.title);
-      toast.success(`Ticket ${newTicket.id} updated`);
+      await update({ id: editingTicket.id, ...payload } as unknown as Ticket & Record<string, unknown>);
+      toast.success(`Ticket ${editingTicket.id} updated`);
     } else {
-      setTickets([newTicket, ...tickets]);
-      addAuditLog('Created', 'Tickets', `Created ticket: ${newTicket.id} - ${newTicket.title}`);
-      addTicketToDailyLog('Created', newTicket.id, newTicket.title);
-      toast.success(`Ticket ${newTicket.id} created`);
+      await create(payload as unknown as Partial<Ticket> & Record<string, unknown>);
+      toast.success('Ticket created');
     }
     setIsModalOpen(false);
   };
 
-  const PriorityBadge = ({ priority }: { priority: string }) => {
-    switch(priority) {
-      case 'Critical': return <span className="bg-destructive/20 text-destructive px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border border-destructive/30 flex items-center gap-1 w-max"><AlertCircle className="w-3 h-3" />Critical</span>;
-      case 'High': return <span className="bg-orange-500/20 text-orange-500 dark:text-orange-400 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border border-orange-500/30 w-max">High</span>;
-      case 'Medium': return <span className="bg-blue-500/20 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border border-blue-500/30 w-max">Medium</span>;
-      case 'Low': return <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border border-emerald-500/30 w-max">Low</span>;
-      default: return null;
-    }
-  };
-
   const columns = [
-    { header: 'ID', accessor: 'id' as keyof Ticket, className: 'font-mono text-xs text-muted-foreground' },
-    { header: 'Title', accessor: 'title' as keyof Ticket, className: 'font-medium max-w-[300px] truncate' },
-    { header: 'Reporter', accessor: 'reporter' as keyof Ticket },
-    { 
-      header: 'Priority', 
-      accessor: (ticket: Ticket) => <PriorityBadge priority={ticket.priority} />
+    { header: 'ID', accessor: 'id' as keyof Ticket, className: 'font-mono text-primary font-bold whitespace-nowrap' },
+    { header: 'Title', accessor: 'title' as keyof Ticket },
+    { header: 'Reporter', accessor: 'reporter' as keyof Ticket, className: 'whitespace-nowrap' },
+    {
+      header: 'Priority', accessor: (t: Ticket) => {
+        const styles: Record<string, string> = { Critical: 'bg-red-500/15 text-red-400 border-red-500/25', High: 'bg-orange-500/15 text-orange-400 border-orange-500/25', Medium: 'bg-amber-500/15 text-amber-400 border-amber-500/25', Low: 'bg-blue-500/15 text-blue-400 border-blue-500/25' };
+        return <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${styles[t.priority] || ''}`}>{t.priority}</span>;
+      }
     },
-    { 
-      header: 'Status', 
-      accessor: (ticket: Ticket) => (
-        <select
-          value={ticket.status}
-          onChange={(e) => handleInlineStatusChange(ticket.id, e.target.value)}
-          className="bg-gray-50 dark:bg-background border border-border rounded-lg px-2 py-1 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary text-foreground cursor-pointer"
-        >
-          <option value="Open">Open</option>
-          <option value="In Progress">In Progress</option>
-          <option value="Resolved">Resolved</option>
-          <option value="Closed">Closed</option>
+    {
+      header: 'Status', accessor: (t: Ticket) => (
+        <select value={t.status} onChange={e => handleInlineStatusChange(t.id, e.target.value)}
+          className="text-xs font-medium bg-transparent border border-border rounded-md px-2 py-1 text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary">
+          {['Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)}
         </select>
       )
     },
-    { 
-      header: 'Created', 
-      accessor: (ticket: Ticket) => new Date(ticket.createdDate).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      className: 'text-muted-foreground text-sm'
+    {
+      header: 'Created', accessor: (t: Ticket) => {
+        const d = new Date(t.created_date);
+        return <span className="text-muted-foreground text-xs whitespace-nowrap">{d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>;
+      }
     },
     {
-      header: 'Actions',
-      accessor: (ticket: Ticket) => (
+      header: 'Actions', accessor: (t: Ticket) => (
         <div className="flex items-center gap-3">
-          <button onClick={() => openEditModal(ticket)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit">
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button onClick={() => setDeleteTarget(ticket)} className="text-muted-foreground hover:text-destructive transition-colors" title="Delete">
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <button onClick={() => openEditModal(t)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit"><Edit2 className="w-4 h-4" /></button>
+          <button onClick={() => setDeleteTarget(t)} className="text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
         </div>
       )
     }
   ];
+
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
 
   return (
     <div className="space-y-6 pb-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Help Desk Tickets</h1>
-          <p className="text-muted-foreground mt-1">Manage and resolve user IT support requests</p>
+          <p className="text-muted-foreground mt-1">Track and manage IT support requests</p>
         </div>
-        <button 
-          onClick={openAddModal}
-          className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-lg font-medium transition-colors shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          New Ticket
+        <button onClick={openAddModal} className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-lg font-medium transition-colors shadow-sm">
+          <Plus className="w-4 h-4" /> New Ticket
         </button>
       </div>
 
-      <div className="bg-white dark:bg-surface border border-border rounded-xl p-4 flex flex-col md:flex-row gap-4 shadow-sm items-center">
-        <div className="relative w-full md:flex-[2]">
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search tickets..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all text-foreground"
-          />
+          <input placeholder="Search tickets..." value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
         </div>
-        <div className="flex w-full md:w-auto gap-4 flex-1">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="flex-1 bg-gray-50 dark:bg-background border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground transition-all cursor-pointer"
-          >
-            <option value="All">All Statuses</option>
-            <option value="Open">Open</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Resolved">Resolved</option>
-            <option value="Closed">Closed</option>
-          </select>
-          <select
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
-            className="flex-1 bg-gray-50 dark:bg-background border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-foreground transition-all cursor-pointer"
-          >
-            <option value="All">All Priorities</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
-          </select>
-        </div>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          className="px-3 py-2 bg-gray-50 dark:bg-background border border-border rounded-lg text-sm text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary">
+          {['All', 'Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
+          className="px-3 py-2 bg-gray-50 dark:bg-background border border-border rounded-lg text-sm text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary">
+          {['All', 'Critical', 'High', 'Medium', 'Low'].map(s => <option key={s}>{s}</option>)}
+        </select>
       </div>
 
-      <DataTable 
-        columns={columns} 
-        data={filteredTickets} 
-        keyExtractor={(item) => item.id} 
-      />
+      {filteredTickets.length === 0 ? (
+        <div className="text-center py-16 border border-dashed border-border rounded-2xl" style={{ background: 'var(--surface)' }}>
+          <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-40" />
+          <h3 className="text-lg font-semibold text-foreground">No tickets found</h3>
+          <p className="text-muted-foreground mt-1">Try adjusting your search or filters</p>
+        </div>
+      ) : (
+        <DataTable data={filteredTickets} columns={columns} />
+      )}
 
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)}
-        title={isAddMode ? 'New Ticket' : `Edit Ticket ${editingTicket?.id || ''}`}
-      >
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingTicket ? 'Edit Ticket' : 'New Ticket'}>
         <form onSubmit={handleSave} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Title *</label>
-            <input 
-              name="title" 
-              defaultValue={editingTicket?.title}
-              required
-              className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all invalid:border-destructive"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Reporter *</label>
-            <input 
-              name="reporter" 
-              defaultValue={editingTicket?.reporter}
-              required
-              className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all invalid:border-destructive"
-            />
+            <input name="title" required defaultValue={editingTicket?.title} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all invalid:border-destructive" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Priority</label>
-              <select 
-                name="priority" 
-                defaultValue={editingTicket?.priority || 'Medium'}
-                className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer"
-              >
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Reporter *</label>
+              <input name="reporter" required defaultValue={editingTicket?.reporter} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all invalid:border-destructive" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Status</label>
-              <select 
-                name="status" 
-                defaultValue={editingTicket?.status || 'Open'}
-                className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer"
-              >
-                <option value="Open">Open</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Resolved">Resolved</option>
-                <option value="Closed">Closed</option>
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Priority</label>
+              <select name="priority" defaultValue={editingTicket?.priority || 'Medium'} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+                {['Critical', 'High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)}
               </select>
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Status</label>
+            <select name="status" defaultValue={editingTicket?.status || 'Open'} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+              {['Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
-            <button 
-              type="button" 
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit"
-              className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
-            >
-              {editingTicket ? 'Save Changes' : 'Create Ticket'}
-            </button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">{editingTicket ? 'Save Changes' : 'Create Ticket'}</button>
           </div>
         </form>
       </Modal>
 
-      <ConfirmDialog
-        isOpen={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Delete Ticket"
-        message={`Are you sure you want to delete ticket ${deleteTarget?.id} "${deleteTarget?.title}"?`}
-      />
+      <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} title="Delete Ticket" message={`Are you sure you want to delete ticket ${deleteTarget?.id}?`} />
     </div>
   );
 }
