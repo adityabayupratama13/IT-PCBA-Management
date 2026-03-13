@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
 
 /**
  * Generic hook to fetch data from an API route and manage CRUD operations.
- * Replaces usePersistedState for all modules.
+ * All mutation errors are surfaced as toast.error — never thrown to avoid unhandled crashes.
  */
 export function useApi<T extends { id: number | string }>(endpoint: string, initialData: T[] = []) {
   const [data, setData] = useState<T[]>(initialData);
@@ -28,36 +29,60 @@ export function useApi<T extends { id: number | string }>(endpoint: string, init
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const create = useCallback(async (item: Partial<T> & Record<string, unknown>) => {
-    const res = await fetch(`/api/${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed to create');
-    await fetchData(); // Refresh data
-    return json;
+  const create = useCallback(async (item: Partial<T> & Record<string, unknown>): Promise<T | null> => {
+    try {
+      const res = await fetch(`/api/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || 'Failed to create');
+        return null;
+      }
+      await fetchData();
+      return json as T;
+    } catch {
+      toast.error('Network error — please try again');
+      return null;
+    }
   }, [endpoint, fetchData]);
 
-  const update = useCallback(async (item: Partial<T> & Record<string, unknown>) => {
-    const res = await fetch(`/api/${endpoint}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed to update');
-    await fetchData();
-    return json;
+  const update = useCallback(async (item: Partial<T> & Record<string, unknown>): Promise<T | null> => {
+    try {
+      const res = await fetch(`/api/${endpoint}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || 'Failed to update');
+        return null;
+      }
+      await fetchData();
+      return json as T;
+    } catch {
+      toast.error('Network error — please try again');
+      return null;
+    }
   }, [endpoint, fetchData]);
 
-  const remove = useCallback(async (id: number | string) => {
-    const res = await fetch(`/api/${endpoint}?id=${id}`, { method: 'DELETE' });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed to delete');
-    await fetchData();
-    return json;
+  const remove = useCallback(async (id: number | string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/${endpoint}?id=${id}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json.error || 'Failed to delete');
+        return false;
+      }
+      await fetchData();
+      return true;
+    } catch {
+      toast.error('Network error — please try again');
+      return false;
+    }
   }, [endpoint, fetchData]);
 
   return { data, setData, loading, error, refetch: fetchData, create, update, remove };
