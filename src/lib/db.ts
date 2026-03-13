@@ -108,6 +108,15 @@ function initSchema(db: Database.Database) {
       timestamp TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS positions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      division TEXT NOT NULL DEFAULT 'IT Department',
+      level TEXT NOT NULL DEFAULT 'Staff',
+      description TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee);
@@ -116,7 +125,11 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_schedules_recurrence ON schedules(recurrence);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
     CREATE INDEX IF NOT EXISTS idx_members_badge ON members(badge);
+    CREATE INDEX IF NOT EXISTS idx_positions_division ON positions(division);
+    CREATE INDEX IF NOT EXISTS idx_positions_level ON positions(level);
   `);
+  // Seed positions even if members already exist (separate check)
+  seedPositionsIfEmpty(db);
 }
 
 function seedIfEmpty(db: Database.Database) {
@@ -204,4 +217,23 @@ function seedIfEmpty(db: Database.Database) {
 
   // Seed audit log
   db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run('System', 'Startup', 'Database initialized with seed data', 'System');
+}
+
+function seedPositionsIfEmpty(db: Database.Database) {
+  const count = db.prepare('SELECT COUNT(*) as c FROM positions').get() as { c: number };
+  if (count.c > 0) return;
+
+  const ins = db.prepare('INSERT INTO positions (name, division, level, description) VALUES (?, ?, ?, ?)');
+  const seed = db.transaction(() => {
+    ins.run('IT Leader',         'Management',      'Manager',    'Lead and manage IT department strategy and operations');
+    ins.run('Software Engineer', 'Software Dev',    'Senior',     'Design, develop, and maintain software applications');
+    ins.run('Network Admin',     'Infrastructure',  'Senior',     'Manage and maintain network infrastructure and security');
+    ins.run('IT Support',        'Helpdesk',        'Staff',      'Provide first and second-level technical support to end users');
+    ins.run('Database Admin',    'Software Dev',    'Senior',     'Manage, optimize, and secure database systems');
+    ins.run('System Analyst',    'Software Dev',    'Senior',     'Analyze business requirements and design IT system solutions');
+    ins.run('Help Desk',         'Helpdesk',        'Staff',      'Handle first-level IT support requests and ticket resolution');
+    ins.run('Hardware Tech',     'Infrastructure',  'Staff',      'Install, maintain, and troubleshoot hardware and peripherals');
+    ins.run('IT Manager',        'Management',      'Supervisor', 'Coordinate day-to-day IT operations and team management');
+  });
+  seed();
 }
