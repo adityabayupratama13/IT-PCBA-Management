@@ -7,8 +7,8 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
 
-type ScheduleType = 'Meeting' | 'Maintenance' | 'On-Call';
-type Recurrence = 'once' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+type ScheduleType = 'Meeting' | 'Maintenance' | 'On-Call' | 'Training' | 'Deployment' | 'Other';
+type Recurrence = 'one-time' | 'daily' | 'weekly' | 'monthly' | 'yearly';
 type ViewMode = 'week' | 'month' | 'year';
 
 interface ScheduleItem {
@@ -43,7 +43,10 @@ export default function SchedulePage() {
   const [editingSchedule, setEditingSchedule] = useState<ScheduleItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ScheduleItem | null>(null);
   const [formRecurrence, setFormRecurrence] = useState<Recurrence>('weekly');
-  const { currentUser } = useAuth();
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+  const { currentUser, members } = useAuth();
+  const allMembers = [{ name: 'Aditya Bayu Pratama' }, ...members];
 
   // ─── Week helpers ───
   const getWeekRange = () => {
@@ -80,11 +83,11 @@ export default function SchedulePage() {
 
   const getSchedulesForDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    const dayOfWeek = (d.getDay() + 6) % 7; // Monday=0
+    const dayOfWeek = (d.getDay() + 6) % 7;
     const dayOfMonth = d.getDate();
     const month = d.getMonth();
     return schedules.filter(s => {
-      if (s.recurrence === 'once' && s.date === dateStr) return true;
+      if (s.recurrence === 'one-time' && s.date === dateStr) return true;
       if (s.recurrence === 'daily') return true;
       if (s.recurrence === 'weekly' && s.day === dayOfWeek + 1) return true;
       if (s.recurrence === 'monthly' && s.dayOfMonth === dayOfMonth) return true;
@@ -98,7 +101,7 @@ export default function SchedulePage() {
       if (s.recurrence === 'daily' || s.recurrence === 'weekly') return true;
       if (s.recurrence === 'monthly') return true;
       if (s.recurrence === 'yearly' && s.monthOfYear === month) return true;
-      if (s.recurrence === 'once') {
+      if (s.recurrence === 'one-time') {
         const d = new Date(s.date);
         return d.getMonth() === month && d.getFullYear() === currentYear;
       }
@@ -107,8 +110,8 @@ export default function SchedulePage() {
   };
 
   // ─── CRUD ───
-  const openAddModal = () => { setEditingSchedule(null); setFormRecurrence('weekly'); setIsModalOpen(true); };
-  const openEditModal = (s: ScheduleItem) => { setEditingSchedule(s); setFormRecurrence(s.recurrence); setIsModalOpen(true); };
+  const openAddModal = () => { setEditingSchedule(null); setFormRecurrence('weekly'); setSelectedAssignees([]); setIsModalOpen(true); };
+  const openEditModal = (s: ScheduleItem) => { setEditingSchedule(s); setFormRecurrence(s.recurrence); setSelectedAssignees(s.assignee ? s.assignee.split(', ') : []); setIsModalOpen(true); };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -126,12 +129,12 @@ export default function SchedulePage() {
       type: fd.get('type') as string,
       recurrence: rec,
       day: rec === 'weekly' ? Number(fd.get('day')) : 0,
-      date: rec === 'once' ? (fd.get('date') as string) : '',
+      date: rec === 'one-time' ? (fd.get('date') as string) : '',
       dayOfMonth: (rec === 'monthly' || rec === 'yearly') ? Number(fd.get('dayOfMonth')) : 0,
       monthOfYear: rec === 'yearly' ? Number(fd.get('monthOfYear')) : 0,
       startTime: fd.get('startTime') as string,
       endTime: fd.get('endTime') as string,
-      assignee: fd.get('assignee') as string,
+      assignee: selectedAssignees.join(', '),
       userName: currentUser?.name || 'System',
     };
     if (editingSchedule) {
@@ -149,6 +152,9 @@ export default function SchedulePage() {
       case 'Meeting':     return { bg: '#2563EB', text: '#ffffff', border: 'rgba(37,99,235,0.5)' };
       case 'Maintenance': return { bg: '#EA580C', text: '#ffffff', border: 'rgba(234,88,12,0.5)' };
       case 'On-Call':     return { bg: '#7C3AED', text: '#ffffff', border: 'rgba(124,58,237,0.5)' };
+      case 'Training':    return { bg: '#0D9488', text: '#ffffff', border: 'rgba(13,148,136,0.5)' };
+      case 'Deployment':  return { bg: '#0891B2', text: '#ffffff', border: 'rgba(8,145,178,0.5)' };
+      case 'Other':       return { bg: '#64748B', text: '#ffffff', border: 'rgba(100,116,139,0.5)' };
       default:            return { bg: 'var(--surface-2)', text: 'var(--foreground)', border: 'var(--border)' };
     }
   };
@@ -168,7 +174,7 @@ export default function SchedulePage() {
 
   const recurrenceLabel = (s: ScheduleItem) => {
     switch (s.recurrence) {
-      case 'once': return `Once (${s.date})`;
+      case 'one-time': return `Once (${s.date})`;
       case 'daily': return 'Daily';
       case 'weekly': return `Weekly (${DAYS[s.day - 1]})`;
       case 'monthly': return `Monthly (Day ${s.dayOfMonth})`;
@@ -449,7 +455,7 @@ export default function SchedulePage() {
       </div>
 
       {/* ─── Add/Edit Modal ─── */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingSchedule ? 'Edit Schedule' : 'Add Schedule'}>
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setShowAssigneeDropdown(false); }} title={editingSchedule ? 'Edit Schedule' : 'Add Schedule'}>
         <form onSubmit={handleSave} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Schedule Title *</label>
@@ -458,17 +464,20 @@ export default function SchedulePage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Type</label>
-              <select name="type" defaultValue={editingSchedule?.type || 'Meeting'} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer">
+              <select name="type" defaultValue={editingSchedule?.type || 'Meeting'} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all cursor-pointer">
                 <option value="Meeting">Meeting</option>
                 <option value="Maintenance">Maintenance</option>
                 <option value="On-Call">On-Call Support</option>
+                <option value="Training">Training</option>
+                <option value="Deployment">Deployment</option>
+                <option value="Other">Other</option>
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Recurrence</label>
               <select name="recurrence" value={formRecurrence} onChange={e => setFormRecurrence(e.target.value as Recurrence)}
-                className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer">
-                <option value="once">Once (Specific Date)</option>
+                className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all cursor-pointer">
+                <option value="one-time">One-Time</option>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
@@ -477,19 +486,25 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* Conditional fields based on recurrence */}
-          {formRecurrence === 'once' && (
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Date *</label>
-              <input name="date" type="date" required defaultValue={editingSchedule?.date || new Date().toISOString().split('T')[0]}
-                className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all" />
+          {formRecurrence === 'one-time' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Start Date *</label>
+                <input name="date" type="date" required defaultValue={editingSchedule?.date || new Date().toISOString().split('T')[0]}
+                  className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5">End Date</label>
+                <input name="endDate" type="date" defaultValue={editingSchedule?.date || ''}
+                  className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
+              </div>
             </div>
           )}
           {formRecurrence === 'weekly' && (
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Day of Week</label>
               <select name="day" defaultValue={editingSchedule?.day || 1}
-                className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer">
+                className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all cursor-pointer">
                 {DAYS.map((d, i) => <option key={d} value={i + 1}>{d}</option>)}
               </select>
             </div>
@@ -498,7 +513,7 @@ export default function SchedulePage() {
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Day of Month</label>
               <input name="dayOfMonth" type="number" min="1" max="31" required defaultValue={editingSchedule?.dayOfMonth || 1}
-                className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all" />
+                className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
             </div>
           )}
           {formRecurrence === 'yearly' && (
@@ -506,14 +521,14 @@ export default function SchedulePage() {
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-1.5">Month</label>
                 <select name="monthOfYear" defaultValue={editingSchedule?.monthOfYear || 0}
-                  className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer">
+                  className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all cursor-pointer">
                   {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-1.5">Day</label>
                 <input name="dayOfMonth" type="number" min="1" max="31" required defaultValue={editingSchedule?.dayOfMonth || 1}
-                  className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all" />
+                  className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
               </div>
             </div>
           )}
@@ -521,19 +536,46 @@ export default function SchedulePage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Start Time *</label>
-              <input name="startTime" type="time" defaultValue={editingSchedule?.startTime || '09:00'} required className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all" />
+              <input name="startTime" type="time" defaultValue={editingSchedule?.startTime || '09:00'} required className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
             </div>
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">End Time *</label>
-              <input name="endTime" type="time" defaultValue={editingSchedule?.endTime || '10:00'} required className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all" />
+              <input name="endTime" type="time" defaultValue={editingSchedule?.endTime || '10:00'} required className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
             </div>
           </div>
-          <div>
+
+          {/* Multi-select Assignee */}
+          <div className="relative">
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Assignee(s) *</label>
-            <input name="assignee" required defaultValue={editingSchedule?.assignee} placeholder="e.g. Budi, Network Team" className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all invalid:border-destructive" />
+            <div
+              onClick={() => setShowAssigneeDropdown(!showAssigneeDropdown)}
+              className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground cursor-pointer min-h-[42px] flex flex-wrap gap-1 items-center"
+            >
+              {selectedAssignees.length === 0 && <span className="text-muted-foreground text-sm">Select team members...</span>}
+              {selectedAssignees.map(a => (
+                <span key={a} className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full border border-primary/25 font-medium flex items-center gap-1">
+                  {a}
+                  <button type="button" onClick={(ev) => { ev.stopPropagation(); setSelectedAssignees(prev => prev.filter(x => x !== a)); }}
+                    className="hover:text-destructive">×</button>
+                </span>
+              ))}
+            </div>
+            {showAssigneeDropdown && (
+              <div className="absolute z-50 mt-1 w-full rounded-lg border border-border shadow-lg max-h-48 overflow-y-auto custom-scrollbar" style={{ background: 'var(--surface)' }}>
+                {allMembers.filter(m => (m as { status?: string }).status !== 'Inactive').map(m => (
+                  <label key={m.name} className="flex items-center gap-2 px-3 py-2 hover:bg-primary/5 cursor-pointer text-sm">
+                    <input type="checkbox" checked={selectedAssignees.includes(m.name)}
+                      onChange={() => setSelectedAssignees(prev => prev.includes(m.name) ? prev.filter(x => x !== m.name) : [...prev, m.name])}
+                      className="rounded border-border" />
+                    <span className="text-foreground">{m.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
+
           <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">Cancel</button>
+            <button type="button" onClick={() => { setIsModalOpen(false); setShowAssigneeDropdown(false); }} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">Cancel</button>
             <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">{editingSchedule ? 'Save Changes' : 'Add Schedule'}</button>
           </div>
         </form>

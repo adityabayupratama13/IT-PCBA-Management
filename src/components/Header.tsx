@@ -11,7 +11,7 @@ interface HeaderProps {
 
 export function Header({ className = '', onMenuClick }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
-  const { currentUser, isMaster, logout, auditLogs } = useAuth();
+  const { currentUser, logout, auditLogs } = useAuth();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   
@@ -143,8 +143,8 @@ export function Header({ className = '', onMenuClick }: HeaderProps) {
           <div className="hidden sm:block text-right">
             <div className="text-sm font-semibold text-foreground leading-none">{currentUser?.name || 'Guest'}</div>
             <div className="text-xs text-muted-foreground mt-0.5 flex items-center justify-end gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${isMaster ? 'bg-primary' : 'bg-success'}`} />
-              {isMaster ? 'Master' : currentUser?.role || ''}
+              <span className={`w-1.5 h-1.5 rounded-full bg-success`} />
+              {currentUser?.role || ''}
               {currentUser?.badge && <code className="font-mono text-[10px] opacity-60">#{currentUser.badge}</code>}
             </div>
           </div>

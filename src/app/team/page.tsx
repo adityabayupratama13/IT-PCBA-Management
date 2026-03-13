@@ -26,7 +26,7 @@ function roleBadgeStyle(role: string): string {
 }
 
 export default function TeamPage() {
-  const { isMaster, members, addMember, updateMember, deleteMember } = useAuth();
+  const { members, addMember, updateMember, deleteMember } = useAuth();
 
   const [positions, setPositions] = useState<Position[]>([]);
   useEffect(() => {
@@ -51,7 +51,6 @@ export default function TeamPage() {
   });
 
   const openAddModal = () => {
-    if (!isMaster) { toast.error('Only IT Master can add members'); return; }
     setEditingMember(null); setShowPw(false); setIsModalOpen(true);
   };
   const openEditModal = (m: Member) => { setEditingMember(m); setShowPw(false); setIsModalOpen(true); };
@@ -136,18 +135,14 @@ export default function TeamPage() {
     { header: 'Joined', accessor: (m: Member) => (m.created_at ? new Date(m.created_at).toLocaleDateString() : '—') },
     {
       header: 'Actions',
-      accessor: (m: Member) => isMasterRecord(m) ? (
-        isMaster ? (
-          <button onClick={() => openEditModal(m)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit Profile">
-            <Edit2 className="w-4 h-4" />
-          </button>
-        ) : <span className="text-xs text-muted-foreground">Protected</span>
-      ) : isMaster ? (
+      accessor: (m: Member) => (
         <div className="flex items-center gap-3">
-          <button onClick={() => openEditModal(m)} className="text-muted-foreground hover:text-primary transition-colors"><Edit2 className="w-4 h-4" /></button>
-          <button onClick={() => setDeleteTarget(m)} className="text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-4 h-4" /></button>
+          <button onClick={() => openEditModal(m)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit"><Edit2 className="w-4 h-4" /></button>
+          {!isMasterRecord(m) && (
+            <button onClick={() => setDeleteTarget(m)} className="text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
+          )}
         </div>
-      ) : <span className="text-xs text-muted-foreground">—</span>
+      )
     },
   ];
 
@@ -159,12 +154,10 @@ export default function TeamPage() {
           <p className="text-muted-foreground mt-1">IT Department members — {allMembers.length} total</p>
         </div>
         <div className="flex items-center gap-2">
-          {isMaster && (
-            <button onClick={openAddModal}
-              className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-all shadow-sm">
-              <Plus className="w-4 h-4" /> Add Member
-            </button>
-          )}
+          <button onClick={openAddModal}
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-xl font-medium text-sm transition-all shadow-sm">
+            <Plus className="w-4 h-4" /> Add Member
+          </button>
         </div>
       </div>
 

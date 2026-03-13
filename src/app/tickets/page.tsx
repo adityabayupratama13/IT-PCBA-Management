@@ -116,7 +116,7 @@ export default function TicketsPage() {
       header: 'Status', accessor: (t: Ticket) => (
         <select value={t.status} onChange={e => handleInlineStatusChange(t.id, e.target.value)}
           className="text-xs font-medium bg-transparent border border-border rounded-md px-2 py-1 text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary">
-          {['Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)}
+          {['Backlog', 'In Progress', 'Review', 'Done'].map(s => <option key={s}>{s}</option>)}
         </select>
       )
     },
@@ -165,7 +165,7 @@ export default function TicketsPage() {
           <input placeholder="Search tickets..." value={search} onChange={e => setSearch(e.target.value)} className={inputClass + ' pl-9'} />
         </div>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={inputClass + ' min-w-[130px] cursor-pointer'}>
-          {['All', 'Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)}
+          {['All', 'Backlog', 'In Progress', 'Review', 'Done'].map(s => <option key={s}>{s}</option>)}
         </select>
         <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} className={inputClass + ' min-w-[120px] cursor-pointer'}>
           {['All', 'Critical', 'High', 'Medium', 'Low'].map(s => <option key={s}>{s}</option>)}
@@ -202,8 +202,8 @@ export default function TicketsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Status</label>
-            <select name="status" defaultValue={editingTicket?.status || 'Open'} className={inputClass + ' cursor-pointer'}>
-              {['Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)}
+            <select name="status" defaultValue={editingTicket?.status || 'Backlog'} className={inputClass + ' cursor-pointer'}>
+              {['Backlog', 'In Progress', 'Review', 'Done'].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-border">

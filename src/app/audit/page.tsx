@@ -10,23 +10,12 @@ import { EmptyState } from '@/components/EmptyState';
 interface AuditLog { id: number; action: string; module: string; details: string; user_name: string; timestamp: string; }
 
 export default function AuditLogPage() {
-  const { isMaster, auditLogs: contextLogs } = useAuth();
+  const { auditLogs: contextLogs } = useAuth();
   const { data: dbLogs } = useApi<AuditLog>('audit');
   // Prefer fresh DB logs; fall back to context (optimistic updates)
   const auditLogs = dbLogs.length > 0 ? dbLogs : contextLogs;
   const [searchTerm, setSearchTerm] = useState('');
   const [filterModule, setFilterModule] = useState('All');
-
-  // Member role shouldn't be here, handled by UI block but good practice
-  if (!isMaster) {
-    return (
-      <EmptyState 
-        icon={History} 
-        title="Access Denied" 
-        description="You need Administrator privileges to view the audit log." 
-      />
-    );
-  }
 
   const modules = ['All', ...Array.from(new Set(auditLogs.map(log => log.module)))];
 

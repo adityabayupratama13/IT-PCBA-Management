@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
-// Status mapping: Ticket → Task
+// Statuses are now unified: Backlog, In Progress, Review, Done
+// Direct pass-through since ticket and task share the same labels
 function ticketToTaskStatus(ticketStatus: string): string {
-  switch (ticketStatus) {
-    case 'Open':       return 'Backlog';
-    case 'In Progress': return 'In Progress';
-    case 'Resolved':
-    case 'Closed':     return 'Done';
-    default:           return 'Backlog';
-  }
+  return ticketStatus;
 }
 
 
