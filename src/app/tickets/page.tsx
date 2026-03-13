@@ -52,7 +52,7 @@ export default function TicketsPage() {
     toast.success(`Ticket ${ticketId} → ${newStatus}`);
   };
 
-  // Create Task from this ticket (navigate to tasks page with pre-fill via URL params)
+  // Create Task from this ticket — links ticket_id for bidirectional status sync
   const createTaskFromTicket = async (ticket: Ticket) => {
     try {
       const res = await fetch('/api/tasks', {
@@ -65,6 +65,7 @@ export default function TicketsPage() {
           assignee: currentUser?.name || 'Unassigned',
           initials: (currentUser?.name || 'UN').substring(0, 2).toUpperCase(),
           dueDate: '',
+          ticketId: ticket.id,   // ← link for bidirectional sync
           userName: currentUser?.name || 'System',
         }),
       });

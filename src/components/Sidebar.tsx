@@ -31,7 +31,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
   const { role } = useAuth();
 
   const SidebarContent = (
-    <div className="h-full flex flex-col w-64" style={{ background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)' }}>
+    <div className="h-full flex flex-col w-64 glass-sidebar">
       
       {/* Logo */}
       <div className="px-6 py-5 flex items-center justify-between flex-shrink-0">

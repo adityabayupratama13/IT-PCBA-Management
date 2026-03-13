@@ -61,7 +61,8 @@ function initSchema(db: Database.Database) {
       priority TEXT NOT NULL DEFAULT 'Medium',
       assignee TEXT NOT NULL,
       initials TEXT NOT NULL DEFAULT '',
-      due_date TEXT DEFAULT ''
+      due_date TEXT DEFAULT '',
+      ticket_id TEXT DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS schedules (
@@ -139,6 +140,7 @@ function initSchema(db: Database.Database) {
 
   // Migrations — safe to run repeatedly (will silently fail if column exists)
   try { db.exec(`ALTER TABLE members ADD COLUMN grade TEXT DEFAULT ''`); } catch { /* column exists */ }
+  try { db.exec(`ALTER TABLE tasks ADD COLUMN ticket_id TEXT DEFAULT ''`); } catch { /* column exists */ }
 }
 
 /**

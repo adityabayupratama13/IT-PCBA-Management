@@ -110,9 +110,7 @@ export default function DailyLogPage() {
     },
     {
       header: 'Actions',
-      accessor: (log: DailyLog) => log.source === 'ticket' ? (
-        <span className="text-xs text-muted-foreground italic">Auto</span>
-      ) : (
+      accessor: (log: DailyLog) => (
         <div className="flex items-center gap-3">
           <button onClick={() => openEditModal(log)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit">
             <Edit2 className="w-4 h-4" />
