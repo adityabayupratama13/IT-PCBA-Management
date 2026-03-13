@@ -5,6 +5,7 @@ import { KanbanColumn, KanbanCard } from '@/components/KanbanBoard';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { usePersistedState } from '@/context/usePersistedState';
 
 type TaskState = 'Backlog' | 'In Progress' | 'Review' | 'Done';
 
@@ -25,7 +26,7 @@ type Task = typeof INITIAL_TASKS[0];
 const COLUMNS: TaskState[] = ['Backlog', 'In Progress', 'Review', 'Done'];
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState(INITIAL_TASKS);
+  const [tasks, setTasks] = usePersistedState('it-tasks', INITIAL_TASKS);
   const [search, setSearch] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');

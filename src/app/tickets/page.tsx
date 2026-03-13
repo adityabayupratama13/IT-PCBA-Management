@@ -5,6 +5,7 @@ import { DataTable } from '@/components/DataTable';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { usePersistedState } from '@/context/usePersistedState';
 
 const INITIAL_TICKETS = [
   { id: 'TKT-104', title: 'Network down in meeting room A', reporter: 'Sales Director', priority: 'Critical', status: 'Open', createdDate: '2026-03-11T14:30' },
@@ -20,7 +21,7 @@ const INITIAL_TICKETS = [
 type Ticket = typeof INITIAL_TICKETS[0];
 
 export default function TicketsPage() {
-  const [tickets, setTickets] = useState(INITIAL_TICKETS);
+  const [tickets, setTickets] = usePersistedState('it-tickets', INITIAL_TICKETS);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
@@ -28,7 +29,7 @@ export default function TicketsPage() {
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ticket | null>(null);
   const [isAddMode, setIsAddMode] = useState(false);
-  const { addAuditLog } = useAuth();
+  const { addAuditLog, currentUser } = useAuth();
 
   const filteredTickets = tickets.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase());
@@ -49,17 +50,39 @@ export default function TicketsPage() {
     setIsModalOpen(true);
   };
 
+  // Helper: auto-add entry to Daily Log when ticket changes
+  const addTicketToDailyLog = (action: string, ticketId: string, ticketTitle: string) => {
+    try {
+      const stored = localStorage.getItem('it-daily-logs');
+      const logs = stored ? JSON.parse(stored) : [];
+      const entry = {
+        id: Date.now() + Math.random(),
+        date: new Date().toISOString().split('T')[0],
+        member: currentUser?.name || 'System',
+        activity: `[Ticket ${action}] ${ticketId} — ${ticketTitle}`,
+        hours: 0,
+        location: 'System',
+        source: 'ticket' as const,
+      };
+      const updated = [entry, ...logs];
+      localStorage.setItem('it-daily-logs', JSON.stringify(updated));
+    } catch { /* ignore */ }
+  };
+
   const handleDelete = () => {
     if (!deleteTarget) return;
     setTickets(tickets.filter(t => t.id !== deleteTarget.id));
     addAuditLog('Deleted', 'Tickets', `Deleted ticket: ${deleteTarget.id} - ${deleteTarget.title}`);
+    addTicketToDailyLog('Deleted', deleteTarget.id, deleteTarget.title);
     toast.success(`Ticket ${deleteTarget.id} deleted`);
     setDeleteTarget(null);
   };
 
   const handleInlineStatusChange = (ticketId: string, newStatus: string) => {
+    const ticket = tickets.find(t => t.id === ticketId);
     setTickets(tickets.map(t => t.id === ticketId ? { ...t, status: newStatus } : t));
     addAuditLog('Updated', 'Tickets', `Updated ticket ${ticketId} status to ${newStatus}`);
+    addTicketToDailyLog(`Status → ${newStatus}`, ticketId, ticket?.title || '');
     toast.success(`Ticket ${ticketId} status changed to ${newStatus}`);
   };
 
@@ -78,10 +101,12 @@ export default function TicketsPage() {
     if (editingTicket) {
       setTickets(tickets.map(t => (t.id === editingTicket.id ? newTicket : t)));
       addAuditLog('Updated', 'Tickets', `Updated ticket: ${newTicket.id}`);
+      addTicketToDailyLog('Updated', newTicket.id, newTicket.title);
       toast.success(`Ticket ${newTicket.id} updated`);
     } else {
       setTickets([newTicket, ...tickets]);
       addAuditLog('Created', 'Tickets', `Created ticket: ${newTicket.id} - ${newTicket.title}`);
+      addTicketToDailyLog('Created', newTicket.id, newTicket.title);
       toast.success(`Ticket ${newTicket.id} created`);
     }
     setIsModalOpen(false);

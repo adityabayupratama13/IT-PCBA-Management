@@ -1,34 +1,13 @@
-FROM node:20-alpine AS deps
+FROM node:20-alpine
 
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --frozen-lockfile
 
-FROM node:20-alpine AS builder
+COPY package*.json ./
 
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+RUN npm install
+
 COPY . .
-RUN npm run build
 
-FROM node:20-alpine AS runner
+EXPOSE 3000
 
-RUN apk add --no-cache libc6-compat
-
-WORKDIR /app
-
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/package.json ./
-
-RUN npm install --production
-
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV PORT=3002
-
-EXPOSE 3002
-
-CMD ["node", "server.js"]
+CMD ["npm", "run", "dev"]

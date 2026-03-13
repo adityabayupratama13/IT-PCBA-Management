@@ -153,7 +153,7 @@ export function Header({ className = '', onMenuClick }: HeaderProps) {
             {currentUser?.name.charAt(0).toUpperCase() || '?'}
           </div>
           <button
-            onClick={logout}
+            onClick={() => { logout(); window.location.href = '/login'; }}
             className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-all"
             title="Logout"
           >

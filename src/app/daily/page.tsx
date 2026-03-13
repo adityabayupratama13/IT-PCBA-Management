@@ -1,26 +1,27 @@
 'use client';
 import { useState } from 'react';
-import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Edit2, Trash2 } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Clock, MapPin, Edit2, Trash2, Ticket } from 'lucide-react';
 import { DataTable } from '@/components/DataTable';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
+import { usePersistedState } from '@/context/usePersistedState';
 
-const INITIAL_LOGS = [
-  { id: 1, date: '2026-03-11', member: 'Adi', activity: 'Reviewed API documentation & team sync', hours: 4, location: 'Office' },
-  { id: 2, date: '2026-03-11', member: 'Budi', activity: 'Fixed login bug on ERP staging', hours: 6, location: 'WFH' },
-  { id: 3, date: '2026-03-11', member: 'Citra', activity: 'Reconfigured firewall rules for new VLAN', hours: 5, location: 'Server Room' },
-  { id: 4, date: '2026-03-10', member: 'Deni', activity: 'Hardware maintenance on 3rd floor', hours: 8, location: 'Office' },
-  { id: 5, date: '2026-03-10', member: 'Eka', activity: 'Resolved 5 helpdesk tickets', hours: 7, location: 'Office' },
-  { id: 6, date: '2026-03-09', member: 'Adi', activity: 'Project planning for Q2 migration', hours: 8, location: 'Office' },
-  { id: 7, date: '2026-03-09', member: 'Budi', activity: 'Developed new dashboard widgets', hours: 8, location: 'WFH' },
-  { id: 8, date: '2026-03-08', member: 'Citra', activity: 'Network troubleshooting at Branch B', hours: 6, location: 'Branch B' },
+const INITIAL_LOGS: { id: number; date: string; member: string; activity: string; hours: number; location: string; source: 'manual' | 'ticket' }[] = [
+  { id: 1, date: '2026-03-11', member: 'Adi', activity: 'Reviewed API documentation & team sync', hours: 4, location: 'Office', source: 'manual' },
+  { id: 2, date: '2026-03-11', member: 'Budi', activity: 'Fixed login bug on ERP staging', hours: 6, location: 'WFH', source: 'manual' },
+  { id: 3, date: '2026-03-11', member: 'Citra', activity: 'Reconfigured firewall rules for new VLAN', hours: 5, location: 'Server Room', source: 'manual' },
+  { id: 4, date: '2026-03-10', member: 'Deni', activity: 'Hardware maintenance on 3rd floor', hours: 8, location: 'Office', source: 'manual' },
+  { id: 5, date: '2026-03-10', member: 'Eka', activity: 'Resolved 5 helpdesk tickets', hours: 7, location: 'Office', source: 'manual' },
+  { id: 6, date: '2026-03-09', member: 'Adi', activity: 'Project planning for Q2 migration', hours: 8, location: 'Office', source: 'manual' },
+  { id: 7, date: '2026-03-09', member: 'Budi', activity: 'Developed new dashboard widgets', hours: 8, location: 'WFH', source: 'manual' },
+  { id: 8, date: '2026-03-08', member: 'Citra', activity: 'Network troubleshooting at Branch B', hours: 6, location: 'Branch B', source: 'manual' },
 ];
 
 type DailyLog = typeof INITIAL_LOGS[0];
 
 export default function DailyLogPage() {
-  const [logs, setLogs] = useState(INITIAL_LOGS);
+  const [logs, setLogs] = usePersistedState('it-daily-logs', INITIAL_LOGS);
   const [currentDate, setCurrentDate] = useState(new Date('2026-03-11'));
   const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -70,6 +71,7 @@ export default function DailyLogPage() {
       activity: formData.get('activity') as string,
       hours: Number(formData.get('hours')),
       location: formData.get('location') as string,
+      source: 'manual' as const,
     };
 
     if (editingLog) {
@@ -96,15 +98,24 @@ export default function DailyLogPage() {
     },
     { 
       header: 'Activity Description', 
-      accessor: 'activity' as keyof DailyLog,
-      className: 'max-w-md truncate'
+      accessor: (log: DailyLog) => (
+        <div className="flex items-center gap-2 max-w-md">
+          {log.source === 'ticket' && (
+            <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-400 border border-violet-500/25 whitespace-nowrap flex-shrink-0">
+              <Ticket className="w-2.5 h-2.5" /> Ticket
+            </span>
+          )}
+          <span className="truncate">{log.activity}</span>
+        </div>
+      ),
+      className: 'max-w-md'
     },
     { 
       header: 'Hours', 
       accessor: (log: DailyLog) => (
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <Clock className="w-3.5 h-3.5" />
-          {log.hours}h
+          {log.hours > 0 ? `${log.hours}h` : '—'}
         </span>
       )
     },
@@ -119,7 +130,9 @@ export default function DailyLogPage() {
     },
     {
       header: 'Actions',
-      accessor: (log: DailyLog) => (
+      accessor: (log: DailyLog) => log.source === 'ticket' ? (
+        <span className="text-xs text-muted-foreground italic">Auto</span>
+      ) : (
         <div className="flex items-center gap-3">
           <button onClick={() => openEditModal(log)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit">
             <Edit2 className="w-4 h-4" />

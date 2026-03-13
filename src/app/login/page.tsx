@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Shield, Eye, EyeOff, AlertCircle, IdCard } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+
 import { toast } from 'sonner';
 
 export default function LoginPage() {
@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false);
 
   const { login } = useAuth();
-  const router = useRouter();
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +25,7 @@ export default function LoginPage() {
     const ok = login(badge, password);
     if (ok) {
       toast.success('Welcome back!');
-      router.push('/');
+      window.location.href = '/';
     } else {
       setError('Badge Number or Password is incorrect. Please try again.');
     }

@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+*.log
+eslint-error.txt
+eslint-output.txt
+eslint-result.json
+tsconfig.tsbuildinfo
+dist
+build
+.env.local

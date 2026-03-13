@@ -1,19 +1,113 @@
-version: '3.8'
-
 services:
-  it-dashboard:
+
+  # ============================================
+  # APP 1 - Network Scanner (Port 3000)
+  # Auto-update: rebuild diperlukan (network share)
+  # ============================================
+  network-scanner:
     build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: it-pcba-management
-    ports:
-      - "3003:3002"       # Akses via http://localhost:3003 atau http://IP:3003
+      context: "\\\\10.0.2.2\\Traceability Software\\7. Giken One Super Web Apps\\network-scanner"
+    container_name: network-scanner
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3000:3000"
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    networks:
+      - giken-network
+
+  # ============================================
+  # APP 2 - Hardware Management (Port 3001)
+  # Auto-update: rebuild diperlukan (network share)
+  # ============================================
+  hardware-management:
+    build:
+      context: "\\\\10.0.2.2\\Traceability Software\\5. Hardware Management\\Hardware Management"
+    container_name: hardware-management
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    networks:
+      - giken-network
+
+  # ============================================
+  # APP 3 - IT PCBA Management (Port 3002)
+  # Auto-update: AKTIF (local path)
+  # ============================================
+  it-pcba-management:
+    build:
+      context: "C:\\Users\\SERVER\\Downloads\\IT"
+    container_name: it-pcba-management
+    volumes:
+      - "C:\\Users\\SERVER\\Downloads\\IT:/app"
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3002:3002"
+    restart: unless-stopped
+    networks:
+      - giken-network
+
+  # ============================================
+  # APP 4 - Automation Refill (Port 3003)
+  # Auto-update: rebuild diperlukan (network share)
+  # ============================================
+  automation-refill:
+    build:
+      context: "\\\\10.0.2.2\\Traceability Software\\8. Web Apps Automation Refill\\automation-reffil"
+    container_name: automation-refill
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    ports:
+      - "3003:3003"
+    restart: unless-stopped
+    networks:
+      - giken-network
+
+  # ============================================
+  # SUPPORTING - MySQL Database
+  # ============================================
+  giken-mysql:
+    image: mysql:8.0
+    container_name: giken-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: giken_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+    networks:
+      - giken-network
+
+  # ============================================
+  # SUPPORTING - PhpMyAdmin
+  # ============================================
+  giken-phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: giken-phpmyadmin
+    environment:
+      PMA_HOST: giken-mysql
+      PMA_PORT: 3306
+    ports:
+      - "8080:80"
+    depends_on:
+      - giken-mysql
+    restart: unless-stopped
+    networks:
+      - giken-network
+
+networks:
+  giken-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
