@@ -10,8 +10,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const db = getDb();
-  const result = db.prepare('INSERT INTO schedules (title, type, recurrence, day, date, day_of_month, month_of_year, start_time, end_time, assignee) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-    body.title, body.type || 'Meeting', body.recurrence || 'weekly', body.day || 0, body.date || '', body.dayOfMonth || 0, body.monthOfYear || 0, body.startTime, body.endTime, body.assignee
+  const result = db.prepare('INSERT INTO schedules (title, type, recurrence, day, date, end_date, day_of_month, month_of_year, start_time, end_time, assignee) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    body.title, body.type || 'Meeting', body.recurrence || 'weekly', body.day || 0, body.date || '', body.endDate || '', body.dayOfMonth || 0, body.monthOfYear || 0, body.startTime, body.endTime, body.assignee
   );
   db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run('Created', 'Schedule', `Created schedule: ${body.title}`, body.userName || 'System');
   return NextResponse.json({ id: result.lastInsertRowid });
@@ -20,8 +20,8 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const body = await req.json();
   const db = getDb();
-  db.prepare('UPDATE schedules SET title=?, type=?, recurrence=?, day=?, date=?, day_of_month=?, month_of_year=?, start_time=?, end_time=?, assignee=? WHERE id=?').run(
-    body.title, body.type, body.recurrence, body.day || 0, body.date || '', body.dayOfMonth || 0, body.monthOfYear || 0, body.startTime, body.endTime, body.assignee, body.id
+  db.prepare('UPDATE schedules SET title=?, type=?, recurrence=?, day=?, date=?, end_date=?, day_of_month=?, month_of_year=?, start_time=?, end_time=?, assignee=? WHERE id=?').run(
+    body.title, body.type, body.recurrence, body.day || 0, body.date || '', body.endDate || '', body.dayOfMonth || 0, body.monthOfYear || 0, body.startTime, body.endTime, body.assignee, body.id
   );
   db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run('Updated', 'Schedule', `Updated schedule: ${body.title}`, body.userName || 'System');
   return NextResponse.json({ success: true });

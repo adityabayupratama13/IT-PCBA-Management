@@ -72,6 +72,7 @@ function initSchema(db: Database.Database) {
       recurrence TEXT NOT NULL DEFAULT 'weekly',
       day INTEGER DEFAULT 0,
       date TEXT DEFAULT '',
+      end_date TEXT DEFAULT '',
       day_of_month INTEGER DEFAULT 0,
       month_of_year INTEGER DEFAULT 0,
       start_time TEXT NOT NULL,

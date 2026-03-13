@@ -193,6 +193,9 @@ export default function TasksPage() {
             <div className="border border-border rounded-lg max-h-36 overflow-y-auto custom-scrollbar" style={{ background: 'var(--muted)' }}>
               {allMembers.map(m => (
                 <label key={m.id} className="flex items-center gap-3 px-3 py-2 hover:bg-primary/5 cursor-pointer transition-colors border-b border-border/50 last:border-0">
+                  <input type="checkbox" className="hidden" checked={selectedAssignees.includes(m.name)} onChange={() => {
+                    setSelectedAssignees(prev => prev.includes(m.name) ? prev.filter(a => a !== m.name) : [...prev, m.name]);
+                  }} />
                   <div className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${selectedAssignees.includes(m.name) ? 'bg-primary border-primary' : 'border-border'}`}>
                     {selectedAssignees.includes(m.name) && <Check className="w-3 h-3 text-white" />}
                   </div>

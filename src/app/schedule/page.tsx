@@ -18,6 +18,7 @@ interface ScheduleItem {
   recurrence: Recurrence;
   day: number;           // 1-5 for weekly (Mon-Fri), 0 for non-weekly
   date: string;          // ISO date for 'once', empty for recurring
+  end_date?: string;     // ISO end date for 'once' date range
   dayOfMonth: number;    // 1-31 for monthly
   monthOfYear: number;   // 0-11 for yearly
   startTime: string;
@@ -31,8 +32,8 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8);
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-interface DbSchedule { id: number; title: string; type: string; recurrence: string; day: number; date: string; day_of_month: number; month_of_year: number; start_time: string; end_time: string; assignee: string; }
-const mapFromDb = (s: DbSchedule): ScheduleItem => ({ id: s.id, title: s.title, type: s.type as ScheduleType, recurrence: s.recurrence as Recurrence, day: s.day, date: s.date, dayOfMonth: s.day_of_month, monthOfYear: s.month_of_year, startTime: s.start_time, endTime: s.end_time, assignee: s.assignee });
+interface DbSchedule { id: number; title: string; type: string; recurrence: string; day: number; date: string; end_date: string; day_of_month: number; month_of_year: number; start_time: string; end_time: string; assignee: string; }
+const mapFromDb = (s: DbSchedule): ScheduleItem => ({ id: s.id, title: s.title, type: s.type as ScheduleType, recurrence: s.recurrence as Recurrence, day: s.day, date: s.date, end_date: s.end_date, dayOfMonth: s.day_of_month, monthOfYear: s.month_of_year, startTime: s.start_time, endTime: s.end_time, assignee: s.assignee });
 
 export default function SchedulePage() {
   const { data: rawSchedules, create, update: apiUpdate, remove } = useApi<DbSchedule>('schedules');
@@ -86,7 +87,10 @@ export default function SchedulePage() {
     return schedules.filter(s => {
       if (s.recurrence === 'weekly' && s.day === dayIndex + 1) return true;
       if (s.recurrence === 'daily') return true;
-      if (s.recurrence === 'one-time' && s.date === dateStr) return true;
+      if (s.recurrence === 'one-time') {
+        if (!s.end_date) return s.date === dateStr;
+        return dateStr >= s.date && dateStr <= s.end_date;
+      }
       if (s.recurrence === 'monthly' && s.dayOfMonth === dayOfMonth) return true;
       if (s.recurrence === 'yearly' && s.monthOfYear === month && s.dayOfMonth === dayOfMonth) return true;
       return false;
@@ -99,7 +103,10 @@ export default function SchedulePage() {
     const dayOfMonth = d.getDate();
     const month = d.getMonth();
     return schedules.filter(s => {
-      if (s.recurrence === 'one-time' && s.date === dateStr) return true;
+      if (s.recurrence === 'one-time') {
+        if (!s.end_date) return s.date === dateStr;
+        return dateStr >= s.date && dateStr <= s.end_date;
+      }
       if (s.recurrence === 'daily') return true;
       if (s.recurrence === 'weekly' && s.day === dayOfWeek + 1) return true;
       if (s.recurrence === 'monthly' && s.dayOfMonth === dayOfMonth) return true;
@@ -142,6 +149,7 @@ export default function SchedulePage() {
       recurrence: rec,
       day: rec === 'weekly' ? Number(fd.get('day')) : 0,
       date: rec === 'one-time' ? (fd.get('date') as string) : '',
+      endDate: rec === 'one-time' ? (fd.get('endDate') as string) : '',
       dayOfMonth: (rec === 'monthly' || rec === 'yearly') ? Number(fd.get('dayOfMonth')) : 0,
       monthOfYear: rec === 'yearly' ? Number(fd.get('monthOfYear')) : 0,
       startTime: fd.get('startTime') as string,
@@ -507,7 +515,7 @@ export default function SchedulePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-1.5">End Date</label>
-                <input name="endDate" type="date" defaultValue={editingSchedule?.date || ''}
+                <input name="endDate" type="date" defaultValue={editingSchedule?.end_date || editingSchedule?.date || ''}
                   className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
               </div>
             </div>

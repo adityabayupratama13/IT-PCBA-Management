@@ -31,12 +31,15 @@ export async function PUT(req: NextRequest) {
   const body = await req.json();
   const db = getDb();
 
+  // Ensure ticket_id is preserved if missing from body
+  const existingTask = db.prepare('SELECT ticket_id FROM tasks WHERE id=?').get(body.id) as { ticket_id: string } | undefined;
+  const ticketId = body.ticketId || body.ticket_id || existingTask?.ticket_id || '';
+
   db.prepare(
     'UPDATE tasks SET title=?, status=?, priority=?, assignee=?, initials=?, due_date=?, ticket_id=? WHERE id=?'
-  ).run(body.title, body.status, body.priority, body.assignee, body.initials || '', body.dueDate || '', body.ticketId || body.ticket_id || '', body.id);
+  ).run(body.title, body.status, body.priority, body.assignee, body.initials || '', body.dueDate || '', ticketId, body.id);
 
   // Sync: if this task is linked to a ticket, update ticket status too
-  const ticketId = body.ticketId || body.ticket_id;
   if (ticketId) {
     const ticket = db.prepare('SELECT id FROM tickets WHERE id=?').get(ticketId);
     if (ticket) {
