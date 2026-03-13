@@ -76,6 +76,7 @@ export default function TeamPage() {
       status: fd.get('status') as 'Active' | 'Inactive',
       email: (fd.get('email') as string || '').trim(),
       phone: (fd.get('phone') as string || '').trim(),
+      grade: fd.get('grade') as string || '',
     };
     if (!data.name || !data.badge) { toast.error('Name and Badge required'); return; }
     const dup = allMembers.find(m => m.badge === data.badge && m.id !== editingMember?.id);
@@ -121,6 +122,7 @@ export default function TeamPage() {
     },
     { header: 'Badge', accessor: (m: Member) => <code className="font-mono text-xs px-2 py-1 rounded font-semibold" style={{ background: 'var(--muted)', color: 'var(--muted-foreground)' }}>{m.badge}</code> },
     { header: 'Role', accessor: (m: Member) => <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${roleBadgeStyle(m.role)}`}>{m.role}</span> },
+    { header: 'Grade', accessor: (m: Member) => m.grade ? <span className="text-xs font-bold px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/25">{m.grade}</span> : <span className="text-muted-foreground text-xs">—</span> },
     { header: 'Division', accessor: 'division' as keyof Member },
     {
       header: 'Status',
@@ -231,10 +233,31 @@ export default function TeamPage() {
               </select></div>
           </div>
           <div className="grid grid-cols-2 gap-4">
+            <div><label className="block text-sm font-medium text-muted-foreground mb-1.5">Grade / Level</label>
+              <select name="grade" defaultValue={editingMember?.grade || ''} className={inputClass + ' cursor-pointer'}>
+                <option value="">— No Grade —</option>
+                <optgroup label="Manager">
+                  <option value="M2">M2</option>
+                  <option value="M3">M3</option>
+                </optgroup>
+                <optgroup label="Supervisor">
+                  <option value="S1">S1</option>
+                  <option value="S2">S2</option>
+                  <option value="S3">S3</option>
+                </optgroup>
+                <optgroup label="Leader">
+                  <option value="L1">L1</option>
+                  <option value="L2">L2</option>
+                  <option value="L3">L3</option>
+                  <option value="L4">L4</option>
+                </optgroup>
+              </select></div>
             <div><label className="block text-sm font-medium text-muted-foreground mb-1.5">Email</label>
               <input name="email" type="email" defaultValue={editingMember?.email} className={inputClass} /></div>
-            <div><label className="block text-sm font-medium text-muted-foreground mb-1.5">Phone</label>
-              <input name="phone" defaultValue={editingMember?.phone} className={inputClass} /></div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Phone</label>
+            <input name="phone" defaultValue={editingMember?.phone} className={inputClass} />
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t" style={{ borderColor: 'var(--border)' }}>
             <button type="button" onClick={() => setIsModalOpen(false)}

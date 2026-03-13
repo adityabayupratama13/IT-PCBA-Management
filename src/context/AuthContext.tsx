@@ -12,6 +12,7 @@ export interface Member {
   email?: string;
   phone?: string;
   status: string;
+  grade?: string;
   created_at?: string;
 }
 
@@ -33,6 +34,7 @@ export const MASTER_ACCOUNT: Member = {
   role: 'IT Leader',
   division: 'Management',
   status: 'Active',
+  grade: '',
 };
 
 interface AuthContextType {

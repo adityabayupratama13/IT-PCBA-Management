@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
+const MASTER_BADGE = '36443';
+
 // GET all members
 export async function GET() {
   const db = getDb();
@@ -13,11 +15,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const db = getDb();
 
-  // Login action
   if (body.action === 'login') {
     const member = db.prepare('SELECT * FROM members WHERE badge = ? AND password = ?').get(body.badge, body.password) as Record<string, unknown> | undefined;
     if (member) {
-      db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run('Login', 'Auth', `User logged in: ${member.name}`, member.name as string);
+      db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run('Logged In', 'Auth', `User logged in: ${member.name}`, member.name as string);
       return NextResponse.json({ success: true, member });
     }
     return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
@@ -28,9 +29,12 @@ export async function POST(req: NextRequest) {
     const existing = db.prepare('SELECT id FROM members WHERE badge = ?').get(body.badge);
     if (existing) return NextResponse.json({ error: 'Badge already exists' }, { status: 400 });
 
-    const result = db.prepare('INSERT INTO members (name, badge, role, division, email, phone, password, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    const result = db.prepare(
+      'INSERT INTO members (name, badge, role, division, email, phone, password, status, grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(
       body.name, body.badge, body.role || 'IT Support', body.division || 'IT Department',
-      body.email || '', body.phone || '', body.password || 'Password123', body.status || 'Active'
+      body.email || '', body.phone || '', body.password || 'Password123', body.status || 'Active',
+      body.grade || ''
     );
     db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run('Created', 'Team', `Added member: ${body.name}`, body.userName || 'System');
     return NextResponse.json({ id: result.lastInsertRowid });
@@ -44,9 +48,26 @@ export async function PUT(req: NextRequest) {
   const body = await req.json();
   const db = getDb();
   try {
-    db.prepare('UPDATE members SET name=?, badge=?, role=?, division=?, email=?, phone=?, password=?, status=? WHERE id=?').run(
-      body.name, body.badge, body.role, body.division, body.email || '', body.phone || '', body.password || 'Password123', body.status || 'Active', body.id
-    );
+    // Special case: Master account (badge = MASTER_BADGE, id = 0) — upsert by badge
+    if (body.badge === MASTER_BADGE || body.id === 0) {
+      const existing = db.prepare('SELECT id FROM members WHERE badge = ?').get(MASTER_BADGE) as { id: number } | undefined;
+      if (existing) {
+        db.prepare(
+          'UPDATE members SET name=?, role=?, division=?, email=?, phone=?, status=?, grade=? WHERE badge=?'
+        ).run(body.name, body.role, body.division, body.email || '', body.phone || '', body.status || 'Active', body.grade || '', MASTER_BADGE);
+      } else {
+        // Insert Master into DB so they have a real row
+        db.prepare(
+          'INSERT INTO members (name, badge, role, division, email, phone, password, status, grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(body.name, MASTER_BADGE, body.role, body.division, body.email || '', body.phone || '', body.password || 'Giken@212', body.status || 'Active', body.grade || '');
+      }
+      db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run('Updated', 'Team', `Updated master profile: ${body.name}`, body.userName || 'System');
+      return NextResponse.json({ success: true });
+    }
+
+    db.prepare(
+      'UPDATE members SET name=?, badge=?, role=?, division=?, email=?, phone=?, password=?, status=?, grade=? WHERE id=?'
+    ).run(body.name, body.badge, body.role, body.division, body.email || '', body.phone || '', body.password || 'Password123', body.status || 'Active', body.grade || '', body.id);
     db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run('Updated', 'Team', `Updated member: ${body.name}`, body.userName || 'System');
     return NextResponse.json({ success: true });
   } catch {

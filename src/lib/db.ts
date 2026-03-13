@@ -41,6 +41,7 @@ function initSchema(db: Database.Database) {
       phone TEXT DEFAULT '',
       password TEXT NOT NULL DEFAULT 'Password123',
       status TEXT NOT NULL DEFAULT 'Active',
+      grade TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -135,6 +136,9 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_positions_division ON positions(division);
     CREATE INDEX IF NOT EXISTS idx_positions_level ON positions(level);
   `);
+
+  // Migrations — safe to run repeatedly (will silently fail if column exists)
+  try { db.exec(`ALTER TABLE members ADD COLUMN grade TEXT DEFAULT ''`); } catch { /* column exists */ }
 }
 
 /**
