@@ -34,3 +34,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# SQLite database — never commit user data
+data/
+*.db
+*.db-shm
+*.db-wal
