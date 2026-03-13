@@ -75,11 +75,23 @@ export default function SchedulePage() {
   const nextYear = () => setCurrentDate(new Date(currentYear + 1, currentDate.getMonth(), 1));
 
   // ─── Schedule match helpers ───
-  const getSchedulesForWeekDay = (dayIndex: number) => schedules.filter(s => {
-    if (s.recurrence === 'weekly' && s.day === dayIndex + 1) return true;
-    if (s.recurrence === 'daily') return true;
-    return false;
-  });
+  const getSchedulesForWeekDay = (dayIndex: number) => {
+    // Get the actual date for this day of the week
+    const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+    const dayDate = addDays(weekStart, dayIndex);
+    const dateStr = format(dayDate, 'yyyy-MM-dd');
+    const dayOfMonth = dayDate.getDate();
+    const month = dayDate.getMonth();
+    
+    return schedules.filter(s => {
+      if (s.recurrence === 'weekly' && s.day === dayIndex + 1) return true;
+      if (s.recurrence === 'daily') return true;
+      if (s.recurrence === 'one-time' && s.date === dateStr) return true;
+      if (s.recurrence === 'monthly' && s.dayOfMonth === dayOfMonth) return true;
+      if (s.recurrence === 'yearly' && s.monthOfYear === month && s.dayOfMonth === dayOfMonth) return true;
+      return false;
+    });
+  };
 
   const getSchedulesForDate = (dateStr: string) => {
     const d = new Date(dateStr);

@@ -63,6 +63,10 @@ export default function ProjectsPage() {
   const [progressValue, setProgressValue] = useState(0);
   const [selectedLinkedTasks, setSelectedLinkedTasks] = useState<number[]>([]);
   const [selectedLinkedSchedules, setSelectedLinkedSchedules] = useState<number[]>([]);
+  const [selectedPICs, setSelectedPICs] = useState<string[]>([]);
+  const [showPICDropdown, setShowPICDropdown] = useState(false);
+  const [endDateValue, setEndDateValue] = useState('');
+  const [startDateValue, setStartDateValue] = useState('');
   const [expandedProject, setExpandedProject] = useState<number | null>(null);
   const [allTasks, setAllTasks] = useState<TaskItem[]>([]);
   const [allSchedules, setAllSchedules] = useState<ScheduleItem[]>([]);
@@ -87,15 +91,26 @@ export default function ProjectsPage() {
   const minDate = new Date(minDateStr || '2026-01-01');
   const maxDate = new Date(maxDateStr || '2026-12-31');
 
-  const openAddModal = () => { setEditingProject(null); setProgressValue(0); setSelectedLinkedTasks([]); setSelectedLinkedSchedules([]); setIsModalOpen(true); };
+  const openAddModal = () => {
+    setEditingProject(null); setProgressValue(0);
+    setSelectedLinkedTasks([]); setSelectedLinkedSchedules([]);
+    setSelectedPICs([]); setShowPICDropdown(false);
+    setStartDateValue(new Date().toISOString().split('T')[0]);
+    setEndDateValue('');
+    setIsModalOpen(true);
+  };
   const openEditModal = (project: Project) => {
-    // Filter linked items to only include ones that still exist
     const validTasks = (project.linkedTasks || []).filter(tid => allTasks.some(t => t.id === tid));
     const validSchedules = (project.linkedSchedules || []).filter(sid => allSchedules.some(s => s.id === sid));
     setEditingProject(project);
     setProgressValue(project.progress);
     setSelectedLinkedTasks(validTasks);
     setSelectedLinkedSchedules(validSchedules);
+    // PIC: support both old single string and new comma-separated
+    setSelectedPICs(project.pic ? project.pic.split(', ').filter(Boolean) : []);
+    setShowPICDropdown(false);
+    setStartDateValue(project.startDate || new Date().toISOString().split('T')[0]);
+    setEndDateValue(project.endDate || '');
     setIsModalOpen(true);
   };
 
@@ -111,9 +126,9 @@ export default function ProjectsPage() {
     const formData = new FormData(e.target as HTMLFormElement);
     const payload = {
       name: formData.get('name') as string,
-      pic: formData.get('pic') as string,
-      startDate: formData.get('startDate') as string,
-      endDate: formData.get('endDate') as string,
+      pic: selectedPICs.join(', '),
+      startDate: startDateValue,
+      endDate: endDateValue,
       progress: progressValue,
       status: formData.get('status') as string,
       linkedTasks: selectedLinkedTasks,
@@ -136,11 +151,7 @@ export default function ProjectsPage() {
   const completedProjects = projects.filter(p => p.status === 'Completed').length;
   const avgProgress = projects.length > 0 ? Math.round(projects.reduce((sum, p) => sum + getAutoProgress(p), 0) / projects.length) : 0;
 
-  // PIC options from actual team members only (no hardcoded names)
-  const picOptions = useMemo(() => {
-    const names = members.map(m => m.name);
-    return ['Aditya Bayu Pratama', ...names.filter(n => n !== 'Aditya Bayu Pratama')];
-  }, [members]);
+  const picOptions = useMemo(() => members.map(m => m.name), [members]);
 
   const statusColor = (s: string) => {
     switch (s) {
@@ -270,10 +281,34 @@ export default function ProjectsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">PIC</label>
-              <select name="pic" defaultValue={editingProject?.pic || 'Adi'} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
-                {picOptions.map(name => <option key={name} value={name}>{name}</option>)}
-              </select>
+              {/* PIC multi-select */}
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">PIC / Assignee(s)</label>
+              <div className="relative">
+                <div
+                  onClick={() => setShowPICDropdown(!showPICDropdown)}
+                  className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground cursor-pointer min-h-[42px] flex flex-wrap gap-1 items-center"
+                >
+                  {selectedPICs.length === 0 && <span className="text-muted-foreground text-sm">Select members...</span>}
+                  {selectedPICs.map(p => (
+                    <span key={p} className="text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full border border-primary/25 font-medium flex items-center gap-1">
+                      {p}
+                      <button type="button" onClick={ev => { ev.stopPropagation(); setSelectedPICs(prev => prev.filter(x => x !== p)); }} className="hover:text-destructive">×</button>
+                    </span>
+                  ))}
+                </div>
+                {showPICDropdown && (
+                  <div className="absolute z-50 mt-1 w-full rounded-lg border border-border shadow-lg max-h-40 overflow-y-auto custom-scrollbar" style={{ background: 'var(--surface)' }}>
+                    {picOptions.map(name => (
+                      <label key={name} className="flex items-center gap-2 px-3 py-2 hover:bg-primary/5 cursor-pointer text-sm">
+                        <input type="checkbox" checked={selectedPICs.includes(name)}
+                          onChange={() => setSelectedPICs(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name])}
+                          className="rounded border-border" />
+                        <span className="text-foreground">{name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Status</label>
@@ -285,11 +320,11 @@ export default function ProjectsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Start Date *</label>
-              <input name="startDate" type="date" required defaultValue={editingProject?.startDate || new Date().toISOString().split('T')[0]} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
+              <input name="startDate" type="date" required value={startDateValue} onChange={e => setStartDateValue(e.target.value)} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
             </div>
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">End Date *</label>
-              <input name="endDate" type="date" required defaultValue={editingProject?.endDate} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
+              <input name="endDate" type="date" required value={endDateValue} onChange={e => setEndDateValue(e.target.value)} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-all" />
             </div>
           </div>
           <div>

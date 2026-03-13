@@ -21,15 +21,26 @@ export async function POST(req: NextRequest) {
     const count = db.prepare('SELECT COUNT(*) as c FROM tickets').get() as { c: number };
     const id = body.id || `TKT-${String(count.c + 100).padStart(3, '0')}`;
     db.prepare('INSERT INTO tickets (id, title, reporter, priority, status, created_date) VALUES (?, ?, ?, ?, ?, ?)').run(
-      id, body.title, body.reporter, body.priority || 'Medium', body.status || 'Open', body.createdDate || new Date().toISOString()
+      id, body.title, body.reporter, body.priority || 'Medium', body.status || 'Backlog', body.createdDate || new Date().toISOString()
     );
+
+    // Auto-create a linked Task for this ticket
+    const taskTitle = `[${id}] ${body.title}`;
+    const taskStatus = body.status || 'Backlog';
+    const taskPriority = body.priority === 'Critical' ? 'High' : (body.priority || 'Medium');
+    const assignee = body.reporter || body.userName || 'Unassigned';
+    const initials = assignee.substring(0, 2).toUpperCase();
+    db.prepare('INSERT INTO tasks (title, status, priority, assignee, initials, due_date, ticket_id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+      taskTitle, taskStatus, taskPriority, assignee, initials, '', id
+    );
+
     // Auto-create daily log entry linked to this ticket
     db.prepare('INSERT INTO daily_logs (date, member, activity, hours, location, source) VALUES (?, ?, ?, ?, ?, ?)').run(
       new Date().toISOString().split('T')[0], body.userName || 'System',
       `[Ticket ${id}] Created — ${body.title}`, 0, 'System', `ticket:${id}`
     );
     db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)')
-      .run('Created', 'Tickets', `Created ticket: ${id} — ${body.title}`, body.userName || 'System');
+      .run('Created', 'Tickets', `Created ticket: ${id} — ${body.title} (auto-created task + daily log)`, body.userName || 'System');
     return NextResponse.json({ id });
   } catch {
     return NextResponse.json({ error: 'Failed to create ticket' }, { status: 500 });

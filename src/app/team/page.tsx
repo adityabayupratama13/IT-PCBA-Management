@@ -4,7 +4,7 @@ import { Plus, Search, Edit2, Trash2, Eye, EyeOff, Shield, ExternalLink } from '
 import { DataTable } from '@/components/DataTable';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
-import { useAuth, type Member, MASTER_ACCOUNT } from '@/context/AuthContext';
+import { useAuth, type Member } from '@/context/AuthContext';
 import Link from 'next/link';
 
 interface Position { id: number; name: string; }
@@ -34,8 +34,7 @@ export default function TeamPage() {
   }, []);
   const roleNames = positions.map(p => p.name);
 
-  const allMembers: Member[] = [MASTER_ACCOUNT, ...members];
-  const isMasterRecord = (m: Member) => m.id === MASTER_ACCOUNT.id || m.badge === MASTER_ACCOUNT.badge;
+  const allMembers: Member[] = members;
 
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('All');
@@ -76,6 +75,7 @@ export default function TeamPage() {
       email: (fd.get('email') as string || '').trim(),
       phone: (fd.get('phone') as string || '').trim(),
       grade: fd.get('grade') as string || '',
+      created_at: (fd.get('joinDate') as string) || editingMember?.created_at || new Date().toISOString(),
     };
     if (!data.name || !data.badge) { toast.error('Name and Badge required'); return; }
     const dup = allMembers.find(m => m.badge === data.badge && m.id !== editingMember?.id);
@@ -109,11 +109,6 @@ export default function TeamPage() {
           <div>
             <div className="font-semibold text-foreground flex items-center gap-1.5">
               {m.name}
-              {isMasterRecord(m) && (
-                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25">
-                  <Shield className="w-2.5 h-2.5" /> MASTER
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -138,9 +133,7 @@ export default function TeamPage() {
       accessor: (m: Member) => (
         <div className="flex items-center gap-3">
           <button onClick={() => openEditModal(m)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit"><Edit2 className="w-4 h-4" /></button>
-          {!isMasterRecord(m) && (
-            <button onClick={() => setDeleteTarget(m)} className="text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
-          )}
+          <button onClick={() => setDeleteTarget(m)} className="text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
         </div>
       )
     },
@@ -251,6 +244,10 @@ export default function TeamPage() {
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Phone</label>
             <input name="phone" defaultValue={editingMember?.phone} className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Join Date</label>
+            <input name="joinDate" type="date" defaultValue={editingMember?.created_at ? editingMember.created_at.split('T')[0] : new Date().toISOString().split('T')[0]} className={inputClass} />
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t" style={{ borderColor: 'var(--border)' }}>
             <button type="button" onClick={() => setIsModalOpen(false)}

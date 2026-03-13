@@ -25,18 +25,6 @@ export interface AuditLog {
   timestamp: string;
 }
 
-// Master account — hardcoded fallback for initial access
-export const MASTER_ACCOUNT: Member = {
-  id: 0,
-  name: 'Aditya Bayu Pratama',
-  badge: '36443',
-  password: 'Giken@212',
-  role: 'IT Leader',
-  division: 'Management',
-  status: 'Active',
-  grade: '',
-};
-
 interface AuthContextType {
   currentUser: Member | null;
   isMaster: boolean;
@@ -49,7 +37,6 @@ interface AuthContextType {
   refreshMembers: () => Promise<void>;
   auditLogs: AuditLog[];
   addAuditLog: (action: string, module: string, details: string) => void;
-  // Legacy compat
   role: string | null;
   userEmail: string | null;
 }
@@ -60,59 +47,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<Member | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+
   useEffect(() => {
-    // Restore session from localStorage
     const stored = localStorage.getItem('it-mgt-user');
     if (stored) {
       try { setCurrentUser(JSON.parse(stored)); } catch { /* ignore */ }
     }
-    // Fetch members from API
     fetchMembers();
-    // Fetch audit logs from API
     fetchAuditLogs();
   }, []);
 
   const fetchMembers = async () => {
     try {
       const res = await fetch('/api/members');
-      if (res.ok) {
-        const data = await res.json();
-        setMembers(data);
-      }
-    } catch { /* silent — will use empty array */ }
+      if (res.ok) { setMembers(await res.json()); }
+    } catch { /* silent */ }
   };
 
   const fetchAuditLogs = async () => {
     try {
       const res = await fetch('/api/audit');
-      if (res.ok) {
-        const data = await res.json();
-        setAuditLogs(data);
-      }
+      if (res.ok) { setAuditLogs(await res.json()); }
     } catch { /* silent */ }
   };
 
-  const refreshMembers = useCallback(async () => {
-    await fetchMembers();
-  }, []);
+  const refreshMembers = useCallback(async () => { await fetchMembers(); }, []);
 
   const login = async (badge: string, password: string): Promise<boolean> => {
-    // Check master account first (hardcoded)
-    if (badge.trim() === MASTER_ACCOUNT.badge && password === MASTER_ACCOUNT.password) {
-      setCurrentUser(MASTER_ACCOUNT);
-      localStorage.setItem('it-mgt-user', JSON.stringify(MASTER_ACCOUNT));
-      // Log to DB
-      try {
-        await fetch('/api/members', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'login', badge: 'ABP001', password: 'Passw0rd!' }),
-        });
-      } catch { /* silent */ }
-      return true;
-    }
-
-    // Try API login (checks DB members)
     try {
       const res = await fetch('/api/members', {
         method: 'POST',
@@ -122,14 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.member) {
-          const member: Member = data.member;
-          setCurrentUser(member);
-          localStorage.setItem('it-mgt-user', JSON.stringify(member));
+          setCurrentUser(data.member);
+          localStorage.setItem('it-mgt-user', JSON.stringify(data.member));
           return true;
         }
       }
     } catch { /* fall through */ }
-
     return false;
   };
 
@@ -151,9 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       await fetchMembers();
       await fetchAuditLogs();
-    } catch (err) {
-      throw err;
-    }
+    } catch (err) { throw err; }
   };
 
   const updateMember = async (member: Member) => {
@@ -165,7 +122,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       await fetchMembers();
       await fetchAuditLogs();
-      // If currently logged-in user was updated, refresh session
       if (currentUser?.id === member.id) {
         setCurrentUser(member);
         localStorage.setItem('it-mgt-user', JSON.stringify(member));
@@ -182,40 +138,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addAuditLog = (action: string, module: string, details: string) => {
-    // Fire and forget to API
     fetch('/api/audit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, module, details, userName: currentUser?.name || 'System' }),
     }).catch(() => {});
-    // Optimistic local update
-    const log: AuditLog = {
-      id: Date.now(),
-      action,
-      module,
-      details,
-      user_name: currentUser?.name || 'System',
-      timestamp: new Date().toISOString(),
-    };
-    setAuditLogs(prev => [log, ...prev]);
+    setAuditLogs(prev => [{ id: Date.now(), action, module, details, user_name: currentUser?.name || 'System', timestamp: new Date().toISOString() }, ...prev]);
   };
-
-  const isMaster = currentUser?.id === MASTER_ACCOUNT.id || currentUser?.badge === MASTER_ACCOUNT.badge;
 
   return (
     <AuthContext.Provider value={{
       currentUser,
-      isMaster,
+      isMaster: false,
       members,
-      login,
-      logout,
-      addMember,
-      updateMember,
-      deleteMember,
-      refreshMembers,
-      auditLogs,
-      addAuditLog,
-      role: currentUser ? (isMaster ? 'Master' : 'Member') : null,
+      login, logout, addMember, updateMember, deleteMember, refreshMembers,
+      auditLogs, addAuditLog,
+      role: currentUser?.role ?? null,
       userEmail: currentUser?.name ?? null,
     }}>
       {children}

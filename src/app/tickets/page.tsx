@@ -1,12 +1,11 @@
 'use client';
 import { useState } from 'react';
-import { Search, AlertCircle, Edit2, Trash2, Plus, ArrowRight } from 'lucide-react';
+import { Search, AlertCircle, Edit2, Trash2, Plus } from 'lucide-react';
 import { DataTable } from '@/components/DataTable';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
-import { useRouter } from 'next/navigation';
 
 interface Ticket {
   id: string;
@@ -26,7 +25,6 @@ export default function TicketsPage() {
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ticket | null>(null);
   const { currentUser } = useAuth();
-  const router = useRouter();
 
   const filteredTickets = tickets.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase());
@@ -50,34 +48,6 @@ export default function TicketsPage() {
     if (!ticket) return;
     await update({ ...ticket, status: newStatus, userName: currentUser?.name } as unknown as Ticket & Record<string, unknown>);
     toast.success(`Ticket ${ticketId} → ${newStatus}`);
-  };
-
-  // Create Task from this ticket — links ticket_id for bidirectional status sync
-  const createTaskFromTicket = async (ticket: Ticket) => {
-    try {
-      const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: `[${ticket.id}] ${ticket.title}`,
-          status: 'Backlog',
-          priority: ticket.priority === 'Critical' ? 'High' : ticket.priority,
-          assignee: currentUser?.name || 'Unassigned',
-          initials: (currentUser?.name || 'UN').substring(0, 2).toUpperCase(),
-          dueDate: '',
-          ticketId: ticket.id,   // ← link for bidirectional sync
-          userName: currentUser?.name || 'System',
-        }),
-      });
-      if (res.ok) {
-        toast.success(`Task created from ${ticket.id} — check Tasks page`);
-        router.push('/tasks');
-      } else {
-        toast.error('Failed to create task');
-      }
-    } catch {
-      toast.error('Network error');
-    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -129,9 +99,6 @@ export default function TicketsPage() {
     {
       header: 'Actions', accessor: (t: Ticket) => (
         <div className="flex items-center gap-2">
-          <button onClick={() => createTaskFromTicket(t)} className="text-muted-foreground hover:text-emerald-400 transition-colors" title="Create Task from Ticket">
-            <ArrowRight className="w-4 h-4" />
-          </button>
           <button onClick={() => openEditModal(t)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit"><Edit2 className="w-4 h-4" /></button>
           <button onClick={() => setDeleteTarget(t)} className="text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
         </div>
@@ -155,8 +122,8 @@ export default function TicketsPage() {
 
       {/* Info: Workflow */}
       <div className="flex items-center gap-3 p-3 rounded-xl border border-border text-xs text-muted-foreground" style={{ background: 'var(--surface)' }}>
-        <ArrowRight className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-        <span><strong className="text-foreground">Workflow:</strong> Ticket → use <span className="text-emerald-400">→</span> button to create a Task → changes auto-sync to Daily Log</span>
+        <span className="w-4 h-4 text-emerald-400 flex-shrink-0">⚡</span>
+        <span><strong className="text-foreground">Auto-sync:</strong> Creating a ticket auto-creates a Task + Daily Log. Status changes sync across all three automatically.</span>
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">

@@ -4,7 +4,7 @@ import { Plus, Search, Calendar as CalendarIcon, Users, Check } from 'lucide-rea
 import { KanbanColumn, KanbanCard } from '@/components/KanbanBoard';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
-import { useAuth, MASTER_ACCOUNT } from '@/context/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
 
 type TaskState = 'Backlog' | 'In Progress' | 'Review' | 'Done';
@@ -27,11 +27,8 @@ export default function TasksPage() {
   const { data: tasks, loading, create, update, remove } = useApi<Task>('tasks');
   const { currentUser, members } = useAuth();
 
-  // All team members including master
-  const allMembers: TeamMember[] = [
-    { id: MASTER_ACCOUNT.id, name: MASTER_ACCOUNT.name, status: 'Active' },
-    ...members.filter(m => m.status === 'Active')
-  ];
+  // All team members from DB
+  const allMembers: TeamMember[] = members.filter(m => m.status === 'Active');
 
   const [search, setSearch] = useState('');
   const [filterAssignee, setFilterAssignee] = useState('All');
