@@ -1,11 +1,12 @@
 'use client';
 import { useState } from 'react';
-import { Search, AlertCircle, Edit2, Trash2, Plus } from 'lucide-react';
+import { Search, AlertCircle, Edit2, Trash2, Plus, ArrowRight } from 'lucide-react';
 import { DataTable } from '@/components/DataTable';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
+import { useRouter } from 'next/navigation';
 
 interface Ticket {
   id: string;
@@ -25,6 +26,7 @@ export default function TicketsPage() {
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ticket | null>(null);
   const { currentUser } = useAuth();
+  const router = useRouter();
 
   const filteredTickets = tickets.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase());
@@ -39,7 +41,7 @@ export default function TicketsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return;
     await remove(deleteTarget.id);
-    toast.success(`Ticket ${deleteTarget.id} deleted`);
+    toast.success(`Ticket ${deleteTarget.id} deleted (daily log entries removed)`);
     setDeleteTarget(null);
   };
 
@@ -47,7 +49,34 @@ export default function TicketsPage() {
     const ticket = tickets.find(t => t.id === ticketId);
     if (!ticket) return;
     await update({ ...ticket, status: newStatus, userName: currentUser?.name } as unknown as Ticket & Record<string, unknown>);
-    toast.success(`Ticket ${ticketId} status changed to ${newStatus}`);
+    toast.success(`Ticket ${ticketId} → ${newStatus}`);
+  };
+
+  // Create Task from this ticket (navigate to tasks page with pre-fill via URL params)
+  const createTaskFromTicket = async (ticket: Ticket) => {
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `[${ticket.id}] ${ticket.title}`,
+          status: 'Backlog',
+          priority: ticket.priority === 'Critical' ? 'High' : ticket.priority,
+          assignee: currentUser?.name || 'Unassigned',
+          initials: (currentUser?.name || 'UN').substring(0, 2).toUpperCase(),
+          dueDate: '',
+          userName: currentUser?.name || 'System',
+        }),
+      });
+      if (res.ok) {
+        toast.success(`Task created from ${ticket.id} — check Tasks page`);
+        router.push('/tasks');
+      } else {
+        toast.error('Failed to create task');
+      }
+    } catch {
+      toast.error('Network error');
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -69,6 +98,8 @@ export default function TicketsPage() {
     }
     setIsModalOpen(false);
   };
+
+  const inputClass = "w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all";
 
   const columns = [
     { header: 'ID', accessor: 'id' as keyof Ticket, className: 'font-mono text-primary font-bold whitespace-nowrap' },
@@ -96,7 +127,10 @@ export default function TicketsPage() {
     },
     {
       header: 'Actions', accessor: (t: Ticket) => (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          <button onClick={() => createTaskFromTicket(t)} className="text-muted-foreground hover:text-emerald-400 transition-colors" title="Create Task from Ticket">
+            <ArrowRight className="w-4 h-4" />
+          </button>
           <button onClick={() => openEditModal(t)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit"><Edit2 className="w-4 h-4" /></button>
           <button onClick={() => setDeleteTarget(t)} className="text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
         </div>
@@ -111,25 +145,28 @@ export default function TicketsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Help Desk Tickets</h1>
-          <p className="text-muted-foreground mt-1">Track and manage IT support requests</p>
+          <p className="text-muted-foreground mt-1">Track IT support requests — {tickets.length} tickets</p>
         </div>
         <button onClick={openAddModal} className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-lg font-medium transition-colors shadow-sm">
           <Plus className="w-4 h-4" /> New Ticket
         </button>
       </div>
 
+      {/* Info: Workflow */}
+      <div className="flex items-center gap-3 p-3 rounded-xl border border-border text-xs text-muted-foreground" style={{ background: 'var(--surface)' }}>
+        <ArrowRight className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+        <span><strong className="text-foreground">Workflow:</strong> Ticket → use <span className="text-emerald-400">→</span> button to create a Task → changes auto-sync to Daily Log</span>
+      </div>
+
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input placeholder="Search tickets..." value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-background border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary" />
+          <input placeholder="Search tickets..." value={search} onChange={e => setSearch(e.target.value)} className={inputClass + ' pl-9'} />
         </div>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          className="px-3 py-2 bg-gray-50 dark:bg-background border border-border rounded-lg text-sm text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary">
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={inputClass + ' min-w-[130px] cursor-pointer'}>
           {['All', 'Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)}
         </select>
-        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
-          className="px-3 py-2 bg-gray-50 dark:bg-background border border-border rounded-lg text-sm text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary">
+        <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} className={inputClass + ' min-w-[120px] cursor-pointer'}>
           {['All', 'Critical', 'High', 'Medium', 'Low'].map(s => <option key={s}>{s}</option>)}
         </select>
       </div>
@@ -148,34 +185,35 @@ export default function TicketsPage() {
         <form onSubmit={handleSave} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Title *</label>
-            <input name="title" required defaultValue={editingTicket?.title} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all invalid:border-destructive" />
+            <input name="title" required defaultValue={editingTicket?.title} className={inputClass} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Reporter *</label>
-              <input name="reporter" required defaultValue={editingTicket?.reporter} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all invalid:border-destructive" />
+              <input name="reporter" required defaultValue={editingTicket?.reporter} className={inputClass} />
             </div>
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Priority</label>
-              <select name="priority" defaultValue={editingTicket?.priority || 'Medium'} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+              <select name="priority" defaultValue={editingTicket?.priority || 'Medium'} className={inputClass + ' cursor-pointer'}>
                 {['Critical', 'High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)}
               </select>
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Status</label>
-            <select name="status" defaultValue={editingTicket?.status || 'Open'} className="w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer">
+            <select name="status" defaultValue={editingTicket?.status || 'Open'} className={inputClass + ' cursor-pointer'}>
               {['Open', 'In Progress', 'Resolved', 'Closed'].map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
-          <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">Cancel</button>
+          <div className="pt-4 flex justify-end gap-3 border-t border-border">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-primary/5 transition-colors">Cancel</button>
             <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">{editingTicket ? 'Save Changes' : 'Create Ticket'}</button>
           </div>
         </form>
       </Modal>
 
-      <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} title="Delete Ticket" message={`Are you sure you want to delete ticket ${deleteTarget?.id}?`} />
+      <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
+        title="Delete Ticket" message={`Delete ticket ${deleteTarget?.id}? Related daily log entries will also be removed.`} />
     </div>
   );
 }

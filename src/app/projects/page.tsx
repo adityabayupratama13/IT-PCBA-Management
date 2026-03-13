@@ -88,7 +88,16 @@ export default function ProjectsPage() {
   const maxDate = new Date(maxDateStr || '2026-12-31');
 
   const openAddModal = () => { setEditingProject(null); setProgressValue(0); setSelectedLinkedTasks([]); setSelectedLinkedSchedules([]); setIsModalOpen(true); };
-  const openEditModal = (project: Project) => { setEditingProject(project); setProgressValue(project.progress); setSelectedLinkedTasks(project.linkedTasks || []); setSelectedLinkedSchedules(project.linkedSchedules || []); setIsModalOpen(true); };
+  const openEditModal = (project: Project) => {
+    // Filter linked items to only include ones that still exist
+    const validTasks = (project.linkedTasks || []).filter(tid => allTasks.some(t => t.id === tid));
+    const validSchedules = (project.linkedSchedules || []).filter(sid => allSchedules.some(s => s.id === sid));
+    setEditingProject(project);
+    setProgressValue(project.progress);
+    setSelectedLinkedTasks(validTasks);
+    setSelectedLinkedSchedules(validSchedules);
+    setIsModalOpen(true);
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -127,10 +136,10 @@ export default function ProjectsPage() {
   const completedProjects = projects.filter(p => p.status === 'Completed').length;
   const avgProgress = projects.length > 0 ? Math.round(projects.reduce((sum, p) => sum + getAutoProgress(p), 0) / projects.length) : 0;
 
+  // PIC options from actual team members only (no hardcoded names)
   const picOptions = useMemo(() => {
     const names = members.map(m => m.name);
-    ['Adi', 'Budi', 'Citra', 'Deni'].forEach(n => { if (!names.includes(n)) names.push(n); });
-    return Array.from(new Set(names));
+    return ['Aditya Bayu Pratama', ...names.filter(n => n !== 'Aditya Bayu Pratama')];
   }, [members]);
 
   const statusColor = (s: string) => {
