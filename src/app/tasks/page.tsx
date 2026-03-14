@@ -94,7 +94,9 @@ export default function TasksPage() {
 
   const openEditModal = (task: Task) => {
     setEditingTask(task);
-    setSelectedAssignees(task.assignee ? task.assignee.split(', ') : []);
+    const validNames = allMembers.map(m => m.name);
+    const initialAssignees = task.assignee ? task.assignee.split(', ').filter(a => validNames.includes(a)) : [];
+    setSelectedAssignees(initialAssignees);
     try { setUploadedFiles(JSON.parse(task.attachments || '[]')); } catch { setUploadedFiles([]); }
     setIsModalOpen(true);
   };
@@ -264,7 +266,9 @@ export default function TasksPage() {
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-1">
                           <Users className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-[10px] text-muted-foreground">{task.assignee}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {task.assignee.split(', ').filter(a => allMembers.some(m => m.name === a) || a === 'Unassigned').join(', ') || 'Unassigned'}
+                          </span>
                         </div>
                         {task.due_date && (
                           <span className="text-[10px] text-muted-foreground flex items-center gap-1">
