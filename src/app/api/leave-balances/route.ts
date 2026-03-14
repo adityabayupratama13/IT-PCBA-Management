@@ -46,7 +46,7 @@ export async function GET() {
   return NextResponse.json(updatedBalances);
 }
 
-export async function POST(req: NextRequest) {
+export async function PUT(req: NextRequest) {
   const body = await req.json();
   const db = getDb();
   

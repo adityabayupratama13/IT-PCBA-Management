@@ -13,13 +13,12 @@ interface AttendanceLog { id: number; member_name: string; date: string; shift: 
 interface LeaveReq { id: number; member_name: string; leave_type: string; application_date: string; start_date: string; end_date: string; days_count: number; reason: string; status: string; approved_by: string; userName?: string; [key: string]: unknown; }
 interface LeaveBalance { id: string | number; member_name: string; balance: number; last_accrual_month: string; [key: string]: unknown; }
 
-const SHIFT_OPTIONS_STAFF = ['Shift 1', 'Shift 2', 'Shift 3', 'Off', 'Leave'];
-const SHIFT_OPTIONS_MGMT = ['Normal Shift', 'Off', 'Leave'];
+const SHIFT_OPTIONS = ['Normal Shift', 'Shift 1', 'Shift 2', 'Shift 3', 'Off', 'Leave'];
 const LEAVE_TYPES = ['Annual Leave', 'Compassionate Leave', 'Maternity Leave', 'Paternity Leave', 'Marriage Leave', 'No Pay Leave'];
 
 export default function AttendancePage() {
   const { currentUser, members } = useAuth();
-  const isManager = ['Senior', 'Supervisor', 'Manager'].some(role => currentUser?.role?.includes(role));
+  const isManager = true; // User requested all manpower to have full access
   
   // API Data
   const { data: logs, refetch: fetchLogs, create: createLog } = useApi<AttendanceLog>('attendance');
@@ -145,8 +144,6 @@ export default function AttendancePage() {
           </thead>
           <tbody className="divide-y divide-border bg-surface">
             {members.filter(m => m.status === 'Active').map(member => {
-              const isNormalShift = !member.role.includes('Analyst & Support');
-              const opts = isNormalShift ? SHIFT_OPTIONS_MGMT : SHIFT_OPTIONS_STAFF;
               return (
                 <tr key={member.id} className="hover:bg-primary/5 transition-colors">
                   <td className="px-4 py-3 border-r border-border">
@@ -171,13 +168,14 @@ export default function AttendancePage() {
                           className={`w-full text-xs py-1.5 px-1 rounded border-transparent focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer text-center appearance-none
                             ${currentVal === 'Off' ? 'bg-muted/50 text-muted-foreground' : 
                               currentVal === 'Leave' ? 'bg-destructive/10 text-destructive font-medium border-destructive/20' : 
-                              currentVal.includes('Shift 1') || currentVal === 'Normal Shift' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium border-blue-500/20' :
+                              currentVal === 'Normal Shift' ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400 font-medium border-teal-500/20' :
+                              currentVal.includes('Shift 1') ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium border-blue-500/20' :
                               currentVal.includes('Shift 2') ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 font-medium border-orange-500/20' :
                               'bg-violet-500/10 text-violet-600 dark:text-violet-400 font-medium border-violet-500/20'
                             }`}
                         >
-                          {opts.map(o => <option key={o} value={o}>{o}</option>)}
-                          {currentVal === 'Leave' && !opts.includes('Leave') && <option value="Leave">Leave</option>}
+                          {SHIFT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                          {currentVal === 'Leave' && !SHIFT_OPTIONS.includes('Leave') && <option value="Leave">Leave</option>}
                         </select>
                       </td>
                     );
@@ -504,7 +502,7 @@ export default function AttendancePage() {
                     <div className="flex gap-2 items-center">
                       <span className={`font-bold ${b.balance <= 3 ? 'text-destructive' : 'text-success'}`}>{b.balance} Left</span>
                       {isManager && (
-                        <button onClick={() => { setEditingBalanceMember(b.name); setIsBalanceModalOpen(true); }} className="opacity-0 group-hover:opacity-100 text-[10px] text-primary hover:underline transition-opacity">Edit</button>
+                        <button onClick={() => { setEditingBalanceMember(b.name); setIsBalanceModalOpen(true); }} className="px-2 py-0.5 border border-primary/30 rounded text-[10px] font-medium text-primary hover:bg-primary/10 transition-colors mt-0.5" title="Edit Initial/Base Balance">Edit</button>
                       )}
                     </div>
                   </div>
