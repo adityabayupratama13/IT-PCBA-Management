@@ -14,6 +14,8 @@ interface Ticket {
   priority: string;
   status: string;
   created_date: string;
+  resolution?: string;
+  attachments?: string; // JSON Array string
 }
 
 export default function TicketsPage() {
@@ -21,20 +23,39 @@ export default function TicketsPage() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
+  const [filterDate, setFilterDate] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ticket | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const { currentUser } = useAuth();
 
-  const filteredTickets = tickets.filter(t => {
+  let filteredTickets = tickets.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = filterStatus === 'All' || t.status === filterStatus;
     const matchesPriority = filterPriority === 'All' || t.priority === filterPriority;
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
-  const openAddModal = () => { setEditingTicket(null); setIsModalOpen(true); };
-  const openEditModal = (ticket: Ticket) => { setEditingTicket(ticket); setIsModalOpen(true); };
+  if (filterDate) {
+    filteredTickets = filteredTickets.filter(t => {
+      const createdStr = t.created_date.substring(0, 10);
+      if (t.status === 'Done') return createdStr === filterDate;
+      return createdStr <= filterDate; // Rollover unresolved past tickets
+    });
+  }
+
+  const openAddModal = () => { 
+    setEditingTicket(null); 
+    setUploadedFiles([]);
+    setIsModalOpen(true); 
+  };
+  const openEditModal = (ticket: Ticket) => { 
+    setEditingTicket(ticket); 
+    try { setUploadedFiles(JSON.parse(ticket.attachments || '[]')); } catch { setUploadedFiles([]); }
+    setIsModalOpen(true); 
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -58,6 +79,8 @@ export default function TicketsPage() {
       reporter: formData.get('reporter') as string,
       priority: formData.get('priority') as string,
       status: formData.get('status') as string,
+      resolution: formData.get('resolution') as string,
+      attachments: JSON.stringify(uploadedFiles),
       userName: currentUser?.name || 'System',
     };
     if (editingTicket) {
@@ -70,11 +93,45 @@ export default function TicketsPage() {
     setIsModalOpen(false);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      setUploadedFiles(prev => [...prev, data.url]);
+      toast.success('File uploaded');
+    } catch {
+      toast.error('Failed to upload file');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const inputClass = "w-full bg-gray-50 dark:bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all";
 
   const columns = [
     { header: 'ID', accessor: 'id' as keyof Ticket, className: 'font-mono text-primary font-bold whitespace-nowrap' },
-    { header: 'Title', accessor: 'title' as keyof Ticket },
+    { 
+      header: 'Title', 
+      accessor: (t: Ticket) => {
+        let isStale = false;
+        if (t.status !== 'Done' && t.status !== 'Closed') {
+          const diffDays = (new Date().getTime() - new Date(t.created_date).getTime()) / (1000 * 3600 * 24);
+          if (diffDays > 1) isStale = true;
+        }
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <span className="font-medium text-foreground">{t.title}</span>
+            {isStale && <span className="inline-flex items-center rounded-sm bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold text-destructive ring-1 ring-inset ring-destructive/20 leading-none">⚠️ Overdue</span>}
+          </div>
+        );
+      }
+    },
     { header: 'Reporter', accessor: 'reporter' as keyof Ticket, className: 'whitespace-nowrap' },
     {
       header: 'Priority', accessor: (t: Ticket) => {
@@ -126,6 +183,22 @@ export default function TicketsPage() {
         <span><strong className="text-foreground">Auto-sync:</strong> Creating a ticket auto-creates a Task + Daily Log. Status changes sync across all three automatically.</span>
       </div>
 
+      <div className="flex bg-surface p-3 rounded-lg border border-border items-center gap-3">
+        <label className="text-sm font-medium text-foreground whitespace-nowrap">Daily Filter :</label>
+        <input 
+          type="date" 
+          value={filterDate} 
+          onChange={e => setFilterDate(e.target.value)} 
+          className="bg-background border border-border rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        {filterDate && (
+          <button onClick={() => setFilterDate('')} className="text-xs text-muted-foreground hover:text-foreground">Clear</button>
+        )}
+        <p className="text-xs text-muted-foreground ml-auto hidden sm:block">
+          Show tickets active on this day, overriding rollovers
+        </p>
+      </div>
+
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -172,6 +245,31 @@ export default function TicketsPage() {
             <select name="status" defaultValue={editingTicket?.status || 'Backlog'} className={inputClass + ' cursor-pointer'}>
               {['Backlog', 'In Progress', 'Review', 'Done'].map(s => <option key={s}>{s}</option>)}
             </select>
+          </div>
+
+          <div className="border-t border-border pt-4 mt-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Problem Solving (Resolution)</label>
+            <textarea name="resolution" rows={3} defaultValue={editingTicket?.resolution} placeholder="Document how this ticket was resolved..." className={inputClass}></textarea>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Attachments</label>
+            <div className="flex items-center gap-3 mb-2">
+              <label className={`px-3 py-1.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded cursor-pointer text-xs font-medium transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                {uploading ? 'Uploading...' : 'Upload File'}
+                <input type="file" className="hidden" onChange={handleFileUpload} accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" />
+              </label>
+            </div>
+            {uploadedFiles.length > 0 && (
+              <ul className="space-y-1">
+                {uploadedFiles.map((file, i) => (
+                  <li key={i} className="flex items-center justify-between text-xs bg-surface border border-border rounded px-2 py-1">
+                    <a href={file} target="_blank" rel="noreferrer" className="text-primary hover:underline truncate max-w-[200px]">{file.split('/').pop()}</a>
+                    <button type="button" onClick={() => setUploadedFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-destructive hover:text-destructive/80 font-medium ml-2">Remove</button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-border">
             <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-primary/5 transition-colors">Cancel</button>

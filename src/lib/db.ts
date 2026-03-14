@@ -51,7 +51,9 @@ function initSchema(db: Database.Database) {
       reporter TEXT NOT NULL,
       priority TEXT NOT NULL DEFAULT 'Medium',
       status TEXT NOT NULL DEFAULT 'Open',
-      created_date TEXT DEFAULT (datetime('now'))
+      created_date TEXT DEFAULT (datetime('now')),
+      resolution TEXT DEFAULT '',
+      attachments TEXT DEFAULT '[]'
     );
 
     CREATE TABLE IF NOT EXISTS tasks (
@@ -60,9 +62,10 @@ function initSchema(db: Database.Database) {
       status TEXT NOT NULL DEFAULT 'Backlog',
       priority TEXT NOT NULL DEFAULT 'Medium',
       assignee TEXT NOT NULL,
-      initials TEXT NOT NULL DEFAULT '',
       due_date TEXT DEFAULT '',
-      ticket_id TEXT DEFAULT ''
+      ticket_id TEXT DEFAULT '',
+      resolution TEXT DEFAULT '',
+      attachments TEXT DEFAULT '[]'
     );
 
     CREATE TABLE IF NOT EXISTS schedules (
@@ -183,8 +186,11 @@ function initSchema(db: Database.Database) {
   try { db.exec('ALTER TABLE schedules ADD COLUMN end_date TEXT DEFAULT ""'); } catch { /* ignore if already exists */ }
   try { db.exec('ALTER TABLE members ADD COLUMN grade TEXT DEFAULT ""'); } catch { /* column exists */ }
   try { db.exec('ALTER TABLE tasks ADD COLUMN ticket_id TEXT DEFAULT ""'); } catch { /* column exists */ }
-  try { db.exec('ALTER TABLE attendance_logs ADD COLUMN ot_start_time TEXT DEFAULT ""'); } catch { /* column exists */ }
   try { db.exec('ALTER TABLE attendance_logs ADD COLUMN ot_end_time TEXT DEFAULT ""'); } catch { /* column exists */ }
+  try { db.exec('ALTER TABLE tasks ADD COLUMN resolution TEXT DEFAULT ""'); } catch {}
+  try { db.exec('ALTER TABLE tasks ADD COLUMN attachments TEXT DEFAULT "[]"'); } catch {}
+  try { db.exec('ALTER TABLE tickets ADD COLUMN resolution TEXT DEFAULT ""'); } catch {}
+  try { db.exec('ALTER TABLE tickets ADD COLUMN attachments TEXT DEFAULT "[]"'); } catch {}
 }
 
 /**
