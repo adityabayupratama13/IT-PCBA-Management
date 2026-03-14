@@ -11,13 +11,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { label: 'Team', href: '/team', icon: Users },
-  { label: 'Jabatan', href: '/positions', icon: Briefcase },
+  { label: 'Positions', href: '/positions', icon: Briefcase },
+  { label: 'Attendance', href: '/attendance', icon: CalendarDays },
   { label: 'Tickets', href: '/tickets', icon: Tickets },
   { label: 'Tasks', href: '/tasks', icon: CheckSquare },
-  { label: 'Projects', href: '/projects', icon: FolderKanban },
   { label: 'Schedule', href: '/schedule', icon: CalendarClock },
+  { label: 'Projects', href: '/projects', icon: FolderKanban },
   { label: 'Assets', href: '/assets', icon: Monitor, external: 'http://10.0.2.212:3001' },
-  { label: 'Attendance', href: '/attendance', icon: CalendarDays }, // Using CalendarDays for Attendance temporarily, adjust if needed
   { label: 'Daily Log', href: '/daily', icon: CalendarDays },
   { label: 'Audit Log', href: '/audit', icon: History },
 ];
