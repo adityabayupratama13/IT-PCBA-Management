@@ -83,16 +83,16 @@ export default function AttendancePage() {
     try {
       const nextWeekMonday = addDays(weekStart, 7);
       for (const m of members) {
-        if (m.status !== 'Active' || ['Senior', 'Supervisor', 'Manager'].some(r => m.role.includes(r))) continue;
+        if (m.status !== 'Active' || !m.role.includes('Analyst & Support')) continue;
         
         const thisMondayStr = format(rosterDates[0], 'yyyy-MM-dd');
         const currentShift = logs.find(l => l.member_name === m.name && l.date === thisMondayStr)?.shift;
         
         if (currentShift && currentShift.includes('Shift')) {
           let nextShift = 'Shift 1';
-          if (currentShift === 'Shift 1') nextShift = 'Shift 2';
-          else if (currentShift === 'Shift 2') nextShift = 'Shift 3';
-          else if (currentShift === 'Shift 3') nextShift = 'Shift 1';
+          if (currentShift === 'Shift 1') nextShift = 'Shift 3';
+          else if (currentShift === 'Shift 3') nextShift = 'Shift 2';
+          else if (currentShift === 'Shift 2') nextShift = 'Shift 1';
           
           for (let i = 0; i < 7; i++) {
             const dateStr = format(addDays(nextWeekMonday, i), 'yyyy-MM-dd');
@@ -135,8 +135,8 @@ export default function AttendancePage() {
           </thead>
           <tbody className="divide-y divide-border bg-surface">
             {members.filter(m => m.status === 'Active').map(member => {
-              const isMgmt = ['Senior', 'Supervisor', 'Manager'].some(r => member.role.includes(r));
-              const opts = isMgmt ? SHIFT_OPTIONS_MGMT : SHIFT_OPTIONS_STAFF;
+              const isNormalShift = !member.role.includes('Analyst & Support');
+              const opts = isNormalShift ? SHIFT_OPTIONS_MGMT : SHIFT_OPTIONS_STAFF;
               return (
                 <tr key={member.id} className="hover:bg-primary/5 transition-colors">
                   <td className="px-4 py-3 border-r border-border">
