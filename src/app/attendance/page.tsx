@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CalendarDays, Clock, FileText, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Search } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Modal } from '@/components/Modal';
 
 // --- Types ---
-interface AttendanceLog { id: number; member_name: string; date: string; shift: string; overtime_hours: number; overtime_desc: string; [key: string]: unknown; }
+interface AttendanceLog { id: number; member_name: string; date: string; shift: string; ot_start_time?: string; ot_end_time?: string; overtime_hours: number; overtime_desc: string; [key: string]: unknown; }
 interface LeaveReq { id: number; member_name: string; leave_type: string; application_date: string; start_date: string; end_date: string; days_count: number; reason: string; status: string; approved_by: string; userName?: string; [key: string]: unknown; }
 interface LeaveBalance { id: string | number; member_name: string; balance: number; last_accrual_month: string; [key: string]: unknown; }
 
@@ -182,20 +182,39 @@ export default function AttendancePage() {
   );
 
   // --- Helpers Tab 2: Overtime ---
+  const calculateJamHidup = (jamMati: number, role: string) => {
+    const r = role.toUpperCase();
+    const isMOrS = /S[1-3]|M[1-3]/.test(r) || ['SENIOR', 'SUPERVISOR', 'MANAGER'].some(x => r.includes(x));
+    if (isMOrS) return jamMati;
+    // Line/Staff calculation: 1.5x for 1st hour, 2.0x remaining
+    if (jamMati <= 1) return jamMati * 1.5;
+    return 1.5 + ((jamMati - 1) * 2);
+  };
+
   const handleOTSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
     try {
       const dateStr = fd.get('date') as string;
       const mem = fd.get('member_name') as string;
-      // Extract shift or default to Off
+      const start = fd.get('ot_start_time') as string;
+      const end = fd.get('ot_end_time') as string;
+      
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = end.split(':').map(Number);
+      let diff = (eh * 60 + em) - (sh * 60 + sm);
+      if (diff < 0) diff += 24 * 60; // if shifted past midnight
+      const hours = diff / 60;
+
       const existingShift = logs.find(l => l.member_name === mem && l.date === dateStr)?.shift || 'Off';
       
       await createLog({
         member_name: mem, 
         date: dateStr, 
-        shift: existingShift, 
-        overtime_hours: Number(fd.get('hours')), 
+        shift: existingShift,
+        ot_start_time: start,
+        ot_end_time: end,
+        overtime_hours: Number(hours.toFixed(2)), 
         overtime_desc: fd.get('reason') as string, 
         userName: currentUser?.name || ''
       } as unknown as AttendanceLog);
@@ -241,7 +260,7 @@ export default function AttendancePage() {
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
           <div>
             <h3 className="text-lg font-semibold text-foreground flex items-center gap-2"><Clock className="w-5 h-5 text-primary"/> Overtime Tracker</h3>
-            <p className="text-xs text-muted-foreground">Cut-off period: 16th to 15th</p>
+            <p className="text-xs text-muted-foreground">Detailed calculation including physical vs formulated hours.</p>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-48 w-full">
@@ -249,7 +268,7 @@ export default function AttendancePage() {
               <input placeholder="Search member..." value={otSearch} onChange={e => setOtSearch(e.target.value)} className="w-full bg-surface border border-border rounded-lg pl-9 pr-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <select value={otMonthOffset} onChange={e => setOtMonthOffset(Number(e.target.value))} className="bg-surface border border-border w-full sm:w-auto rounded-lg px-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none cursor-pointer">
-              <option value="0">Current ({format(endOfCutoff, 'MMM yyyy')})</option>
+              <option value="0">Current Cut-off ({format(endOfCutoff, 'MMM yyyy')})</option>
               <option value="1">Last Month ({format(subMonths(endOfCutoff, 1), 'MMM yyyy')})</option>
               <option value="2">2 Months Ago ({format(subMonths(endOfCutoff, 2), 'MMM yyyy')})</option>
             </select>
@@ -259,46 +278,78 @@ export default function AttendancePage() {
           </div>
         </div>
         
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {stats.map(s => (
-            <div key={s.member.id} className="bg-surface border border-border rounded-xl p-4 hover:border-primary/30 transition-all flex flex-col">
-              <div className="flex justify-between items-start mb-3 border-b border-border/50 pb-3">
-                <div>
-                  <h4 className="font-semibold text-foreground text-sm">{s.member.name}</h4>
-                  <p className="text-[10px] text-muted-foreground">{s.member.role}</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-xl font-bold text-primary">{s.periodOt} <span className="text-xs font-normal text-muted-foreground">hrs</span></div>
-                  <div className="text-[10px] text-muted-foreground">Period Total</div>
-                </div>
-              </div>
-              
-              <div className="flex-1 space-y-2 mb-3 max-h-32 overflow-y-auto custom-scrollbar pr-1">
-                {s.logsToEdit.length === 0 && <p className="text-xs text-muted-foreground italic text-center py-2">No overtime in this period</p>}
-                {s.logsToEdit.map(l => (
-                  <div key={l.id} className="bg-muted/50 rounded flex justify-between items-center p-2 border border-border/50 group">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-medium text-foreground">{format(new Date(l.date), 'dd MMM yyyy')}</span>
-                      <span className="text-[10px] text-muted-foreground truncate w-[100px]" title={l.overtime_desc}>{l.overtime_desc || 'No reason'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <span className="text-primary text-sm font-bold">+{l.overtime_hours}h</span>
-                       {isManager && (
-                         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                           <button onClick={() => { setEditingOtLog(l); setIsOtModalOpen(true); }} className="text-primary hover:underline text-[10px]">Edit</button>
-                           <button onClick={() => handleRemoveOT(l)} className="text-destructive hover:bg-destructive/10 rounded-full p-0.5" title="Remove"><XCircle className="w-3 h-3"/></button>
-                         </div>
-                       )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-primary/5 rounded border border-primary/20 px-3 py-2 flex justify-between items-center mt-auto">
-                <span className="text-xs font-medium text-foreground">YTD Total (Yearly)</span>
-                <span className="text-sm font-bold text-primary">{s.ytdOt}h</span>
-              </div>
-            </div>
-          ))}
+        <div className="bg-surface border border-border rounded-xl overflow-hidden">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-muted text-muted-foreground text-xs uppercase">
+              <tr>
+                <th className="px-4 py-3 border-b border-border">Name & Role</th>
+                <th className="px-4 py-3 border-b border-border">Date & Description</th>
+                <th className="px-4 py-3 border-b border-border text-center">Time Range</th>
+                <th className="px-4 py-3 border-b border-border text-center">Jam Mati<br/><span className="lowercase font-normal mt-0.5 text-[9px] block">Actual</span></th>
+                <th className="px-4 py-3 border-b border-border text-center">Jam Hidup<br/><span className="lowercase font-normal mt-0.5 text-[9px] block">Formulated</span></th>
+                {isManager && <th className="px-4 py-3 border-b border-border text-right">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {stats.map(s => {
+                if (s.logsToEdit.length === 0) return null;
+                const totalMati = s.periodOt;
+                const totalHidup = s.logsToEdit.reduce((acc, l) => acc + calculateJamHidup(l.overtime_hours, s.member.role), 0);
+                return (
+                  <React.Fragment key={s.member.id}>
+                    {s.logsToEdit.map((l, idx) => {
+                      const jnHidup = calculateJamHidup(l.overtime_hours, s.member.role);
+                      return (
+                        <tr key={l.id} className="hover:bg-muted/30 transition-colors">
+                          {idx === 0 && (
+                            <td className="px-4 py-3 align-top border-r border-border bg-muted/10 w-[200px]" rowSpan={s.logsToEdit.length}>
+                              <div className="font-semibold text-foreground">{s.member.name}</div>
+                              <div className="text-[10px] text-muted-foreground">{s.member.role}</div>
+                              <div className="mt-4 pt-3 border-t border-border/50">
+                                <div className="text-[10px] uppercase font-bold text-muted-foreground mb-1 mt-1">Total (P)</div>
+                                <div className="flex gap-4">
+                                  <div>
+                                    <div className="text-sm font-bold text-foreground">{totalMati.toFixed(1)}h</div>
+                                    <div className="text-[9px] text-muted-foreground">Mati</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-bold text-primary">{totalHidup.toFixed(1)}h</div>
+                                    <div className="text-[9px] text-muted-foreground">Hidup</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          )}
+                          <td className="px-4 py-3 w-[250px]">
+                            <div className="font-medium">{format(new Date(l.date), 'dd MMM yyyy')}</div>
+                            <div className="text-xs text-muted-foreground truncate" title={l.overtime_desc}>{l.overtime_desc || 'No reason specified'}</div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="bg-background border border-border px-2 py-1 rounded text-xs font-mono">
+                              {l.ot_start_time || '--:--'} - {l.ot_end_time || '--:--'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold text-foreground/80">{Number(l.overtime_hours).toFixed(1)}h</td>
+                          <td className="px-4 py-3 text-center font-bold text-primary">{jnHidup.toFixed(1)}h</td>
+                          {isManager && (
+                            <td className="px-4 py-3 text-right space-x-2">
+                               <button onClick={() => { setEditingOtLog(l); setIsOtModalOpen(true); }} className="text-[10px] font-medium text-primary hover:underline">Edit</button>
+                               <button onClick={() => handleRemoveOT(l)} className="text-[10px] font-medium text-destructive hover:underline">Remove</button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+              {stats.every(s => s.logsToEdit.length === 0) && (
+                <tr>
+                  <td colSpan={6} className="text-center py-10 text-muted-foreground italic">No overtime records found in this period.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     );
@@ -441,93 +492,6 @@ export default function AttendancePage() {
           </div>
         </div>
 
-        <Modal isOpen={isLeaveModalOpen} onClose={() => setIsLeaveModalOpen(false)} title="Apply for Leave">
-          <form onSubmit={handleLeaveSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Employee Name *</label>
-              <select name="member_name" required defaultValue={currentUser?.name} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
-                {isManager ? members.filter(m => m.status === 'Active').map(m => <option key={m.id} value={m.name}>{m.name}</option>) : <option value={currentUser?.name}>{currentUser?.name}</option>}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Leave Type *</label>
-              <select name="leave_type" required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
-                {LEAVE_TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Start Date *</label>
-                <input name="start_date" type="date" required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1.5">End Date *</label>
-                <input name="end_date" type="date" required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Duration (Days) *</label>
-                <input name="days_count" type="number" required min="1" className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Application Date (Auto)</label>
-                <input type="text" disabled defaultValue={new Date().toISOString().split('T')[0]} className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-muted-foreground outline-none cursor-not-allowed" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Reason *</label>
-              <textarea name="reason" rows={2} required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" placeholder="Provide details for this leave..."></textarea>
-            </div>
-            <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
-              <button type="button" onClick={() => setIsLeaveModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
-              <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Submit Request</button>
-            </div>
-          </form>
-        </Modal>
-
-        <Modal isOpen={isOtModalOpen} onClose={() => setIsOtModalOpen(false)} title={editingOtLog?.date ? "Edit Overtime" : "Add Overtime"}>
-          <form onSubmit={handleOTSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Employee Name *</label>
-              <select name="member_name" required defaultValue={editingOtLog?.member_name || currentUser?.name} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
-                {isManager ? members.filter(m => m.status === 'Active').map(m => <option key={m.id} value={m.name}>{m.name}</option>) : <option value={currentUser?.name}>{currentUser?.name}</option>}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-               <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1.5">Date *</label>
-                  <input name="date" type="date" required defaultValue={editingOtLog?.date || format(new Date(), 'yyyy-MM-dd')} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
-               </div>
-               <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1.5">Hours *</label>
-                  <input name="hours" type="number" step="0.5" min="0.5" required defaultValue={editingOtLog?.overtime_hours || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" placeholder="e.g. 2.5" />
-               </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Reason / Details *</label>
-              <textarea name="reason" rows={2} required defaultValue={editingOtLog?.overtime_desc || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" placeholder="Reason for overtime..."></textarea>
-            </div>
-            <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
-              <button type="button" onClick={() => setIsOtModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
-              <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Save Overtime</button>
-            </div>
-          </form>
-        </Modal>
-
-        <Modal isOpen={isBalanceModalOpen} onClose={() => setIsBalanceModalOpen(false)} title="Update Leave Balance">
-          <form onSubmit={handleUpdateBalance} className="space-y-4">
-            <p className="text-sm text-muted-foreground">Set the initial manual balance for <strong className="text-foreground">{editingBalanceMember}</strong>. The system will auto-add +1 day per month starting next month.</p>
-            <div>
-               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Current Balance (Days) *</label>
-               <input name="balance" type="number" required defaultValue={balances?.find(b => b.member_name === editingBalanceMember)?.balance || 0} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
-            </div>
-            <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
-              <button type="button" onClick={() => setIsBalanceModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
-              <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Save Balance</button>
-            </div>
-          </form>
-        </Modal>
       </div>
     );
   };
@@ -571,6 +535,99 @@ export default function AttendancePage() {
           {activeTab === 'leave' && <LeaveTab />}
         </div>
       </div>
+      
+      {/* Absolute Root Modals (Independent of Tabs) */}
+      <Modal isOpen={isLeaveModalOpen} onClose={() => setIsLeaveModalOpen(false)} title="Apply for Leave">
+        <form onSubmit={handleLeaveSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Employee Name *</label>
+            <select name="member_name" required defaultValue={currentUser?.name} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
+              {isManager ? members.filter(m => m.status === 'Active').map(m => <option key={m.id} value={m.name}>{m.name}</option>) : <option value={currentUser?.name}>{currentUser?.name}</option>}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Leave Type *</label>
+            <select name="leave_type" required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
+              {LEAVE_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Start Date *</label>
+              <input name="start_date" type="date" required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">End Date *</label>
+              <input name="end_date" type="date" required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Duration (Days) *</label>
+              <input name="days_count" type="number" required min="1" className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Application Date (Auto)</label>
+              <input type="text" disabled defaultValue={new Date().toISOString().split('T')[0]} className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-muted-foreground outline-none cursor-not-allowed" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Reason *</label>
+            <textarea name="reason" rows={2} required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" placeholder="Provide details for this leave..."></textarea>
+          </div>
+          <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
+            <button type="button" onClick={() => setIsLeaveModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Submit Request</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isOtModalOpen} onClose={() => setIsOtModalOpen(false)} title={editingOtLog?.date ? "Edit Overtime" : "Add Overtime"}>
+        <form onSubmit={handleOTSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Employee Name *</label>
+            <select name="member_name" required defaultValue={editingOtLog?.member_name || currentUser?.name} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
+              {isManager ? members.filter(m => m.status === 'Active').map(m => <option key={m.id} value={m.name}>{m.name}</option>) : <option value={currentUser?.name}>{currentUser?.name}</option>}
+            </select>
+          </div>
+          <div>
+             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Date *</label>
+             <input name="date" type="date" required defaultValue={editingOtLog?.date || format(new Date(), 'yyyy-MM-dd')} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+             <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Start Hour *</label>
+                <input name="ot_start_time" type="time" required defaultValue={editingOtLog?.ot_start_time || '18:00'} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+             </div>
+             <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-1.5">Finish Hour *</label>
+                <input name="ot_end_time" type="time" required defaultValue={editingOtLog?.ot_end_time || '20:00'} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Reason / Details *</label>
+            <textarea name="reason" rows={2} required defaultValue={editingOtLog?.overtime_desc || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" placeholder="Reason for overtime..."></textarea>
+          </div>
+          <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
+            <button type="button" onClick={() => setIsOtModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Save Overtime</button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={isBalanceModalOpen} onClose={() => setIsBalanceModalOpen(false)} title="Update Leave Balance">
+        <form onSubmit={handleUpdateBalance} className="space-y-4">
+          <p className="text-sm text-muted-foreground">Set the initial manual balance for <strong className="text-foreground">{editingBalanceMember}</strong>. The system will auto-add +1 day per month starting next month.</p>
+          <div>
+             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Current Balance (Days) *</label>
+             <input name="balance" type="number" required defaultValue={balances?.find(b => b.member_name === editingBalanceMember)?.balance || 0} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+          </div>
+          <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
+            <button type="button" onClick={() => setIsBalanceModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Save Balance</button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

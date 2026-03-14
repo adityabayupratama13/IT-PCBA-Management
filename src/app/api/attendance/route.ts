@@ -27,16 +27,16 @@ export async function POST(req: NextRequest) {
   const existing = db.prepare('SELECT id FROM attendance_logs WHERE member_name = ? AND date = ?').get(body.member_name, body.date) as { id: number } | undefined;
   
   if (existing) {
-    db.prepare('UPDATE attendance_logs SET shift = ?, overtime_hours = ?, overtime_desc = ? WHERE id = ?').run(
-      body.shift, body.overtime_hours || 0, body.overtime_desc || '', existing.id
+    db.prepare('UPDATE attendance_logs SET shift = ?, ot_start_time = ?, ot_end_time = ?, overtime_hours = ?, overtime_desc = ? WHERE id = ?').run(
+      body.shift, body.ot_start_time || '', body.ot_end_time || '', body.overtime_hours || 0, body.overtime_desc || '', existing.id
     );
     db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run(
       'Updated', 'Attendance', `Updated attendance for ${body.member_name} on ${body.date}`, body.userName || 'System'
     );
     return NextResponse.json({ id: existing.id, updated: true });
   } else {
-    const result = db.prepare('INSERT INTO attendance_logs (member_name, date, shift, overtime_hours, overtime_desc) VALUES (?, ?, ?, ?, ?)').run(
-      body.member_name, body.date, body.shift || 'Off', body.overtime_hours || 0, body.overtime_desc || ''
+    const result = db.prepare('INSERT INTO attendance_logs (member_name, date, shift, ot_start_time, ot_end_time, overtime_hours, overtime_desc) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+      body.member_name, body.date, body.shift || 'Off', body.ot_start_time || '', body.ot_end_time || '', body.overtime_hours || 0, body.overtime_desc || ''
     );
     db.prepare('INSERT INTO audit_logs (action, module, details, user_name) VALUES (?, ?, ?, ?)').run(
       'Created', 'Attendance', `Logged attendance for ${body.member_name} on ${body.date}`, body.userName || 'System'
