@@ -1,12 +1,15 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CalendarDays, Clock, FileText, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Search, User } from 'lucide-react';
+import { CalendarDays, Clock, FileText, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Search, User, Download } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { format, addDays, startOfWeek, subMonths, setDate, isWithinInterval } from 'date-fns';
 import { toast } from 'sonner';
 import { Modal } from '@/components/Modal';
+import * as xlsx from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- Types ---
 interface AttendanceLog { id: number; member_name: string; date: string; shift: string; ot_start_time?: string; ot_end_time?: string; overtime_hours: number; overtime_desc: string; [key: string]: unknown; }
@@ -129,10 +132,46 @@ export default function AttendancePage() {
     finally { setSavingShift(false); }
   };
 
+  // --- Export Helpers ---
+  const exportToExcel = (data: Record<string, unknown>[], filename: string) => {
+    const ws = xlsx.utils.json_to_sheet(data);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, "Sheet1");
+    xlsx.writeFile(wb, `${filename}.xlsx`);
+  };
+
+  const exportToPdf = (headers: string[], data: (string | number)[][], filename: string, title: string) => {
+    const doc = new jsPDF('landscape');
+    doc.setFontSize(16);
+    doc.text(title, 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${format(new Date(), 'dd MMM yyyy HH:mm')}`, 14, 22);
+    autoTable(doc, { head: [headers], body: data, startY: 28, theme: 'grid', styles: { fontSize: 8 }, headStyles: { fillColor: [15, 23, 42] } });
+    doc.save(`${filename}.pdf`);
+  };
+
+  const exportRoster = (type: 'excel' | 'pdf') => {
+    const datesHeader = rosterDates.map(d => format(d, 'dd MMM'));
+    const headers = ['Team Member', 'Role', ...datesHeader];
+    const dataObj = members.filter(m => m.status === 'Active').map(m => {
+      const row: Record<string, string | number> = { 'Team Member': m.name, 'Role': m.role };
+      rosterDates.forEach(d => { row[format(d, 'dd MMM')] = (logs.find(l => l.member_name === m.name && l.date === format(d, 'yyyy-MM-dd'))?.shift || 'Off') as string; });
+      return row;
+    });
+    if (type === 'excel') exportToExcel(dataObj, `Shift_Roster_${format(weekStart, 'MMM_dd_yyyy')}`);
+    else exportToPdf(headers, dataObj.map((obj: Record<string, string | number>) => headers.map(h => obj[h] || '')), `Shift_Roster_${format(weekStart, 'MMM_dd_yyyy')}`, 'Weekly Shift Roster');
+  };
+
   const RosterTab = () => (
     <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-foreground">Weekly Shift Roster</h3>
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold text-foreground">Weekly Shift Roster</h3>
+          <div className="hidden sm:flex items-center gap-2 border-l border-border pl-3 ml-1">
+             <button onClick={() => exportRoster('excel')} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border border-green-600/20 text-green-600 hover:bg-green-600/10 transition-colors"><Download className="w-3.5 h-3.5"/> Excel</button>
+             <button onClick={() => exportRoster('pdf')} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border border-red-600/20 text-red-600 hover:bg-red-600/10 transition-colors"><Download className="w-3.5 h-3.5"/> PDF</button>
+          </div>
+        </div>
         <div className="flex items-center gap-2 bg-muted p-1 rounded-lg border border-border">
           {isManager && <button onClick={handleAutoRotateNextWeek} className="px-3 py-1 bg-primary text-primary-foreground text-xs font-medium rounded shadow-sm mr-2 hover:bg-primary/90 transition-colors" title="Rotate staff shifts 1->2->3->1 for next week">Auto-Rotate (Next Wk)</button>}
           <button onClick={() => setWeekStart(addDays(weekStart, -7))} className="p-1 hover:bg-background rounded text-muted-foreground"><ChevronLeft className="w-4 h-4" /></button>
@@ -281,6 +320,7 @@ export default function AttendancePage() {
     // Filter members and compute their OT within this interval
     const stats = members.filter(m => m.status === 'Active' && m.name.toLowerCase().includes(otSearch.toLowerCase())).map(m => {
       let periodOt = 0;
+      let periodOtHidup = 0;
       let ytdOt = 0;
       const memberLogs = logs.filter(l => l.member_name === m.name && l.overtime_hours > 0);
       
@@ -289,9 +329,10 @@ export default function AttendancePage() {
         ytdOt += l.overtime_hours;
         if (isWithinInterval(d, { start: startOfCutoff, end: endOfCutoff })) {
           periodOt += l.overtime_hours;
+          periodOtHidup += calculateJamHidup(l.overtime_hours, m.role);
         }
       });
-      return { member: m, periodOt, ytdOt, logsToEdit: memberLogs.filter(l => isWithinInterval(new Date(l.date), { start: startOfCutoff, end: endOfCutoff })) };
+      return { member: m, periodOt, periodOtHidup, ytdOt, logsToEdit: memberLogs.filter(l => isWithinInterval(new Date(l.date), { start: startOfCutoff, end: endOfCutoff })) };
     });
 
     useEffect(() => {
@@ -300,14 +341,33 @@ export default function AttendancePage() {
       }
     }, [stats, selectedOtMember]);
 
+    const exportOt = (type: 'excel' | 'pdf') => {
+      const headers = ['Member', 'Role', 'Date & Desc', 'Time Range', 'Jam Mati', 'Jam Hidup'];
+      const dataObj: Record<string, string | number>[] = [];
+      stats.forEach(s => {
+        if (s.logsToEdit.length === 0) return;
+        s.logsToEdit.forEach(l => {
+          dataObj.push({ 'Member': s.member.name, 'Role': s.member.role, 'Date & Desc': `${l.date} - ${l.overtime_desc}`, 'Time Range': `${l.ot_start_time}-${l.ot_end_time}`, 'Jam Mati': l.overtime_hours, 'Jam Hidup': calculateJamHidup(l.overtime_hours, s.member.role).toFixed(1) });
+        });
+      });
+      if (type === 'excel') exportToExcel(dataObj, `Overtime_Report_${format(endOfCutoff, 'MMM_yyyy')}`);
+      else exportToPdf(headers, dataObj.map((obj: Record<string, string | number>) => headers.map(h => obj[h] || '')), `Overtime_Report_${format(endOfCutoff, 'MMM_yyyy')}`, 'Overtime Tracker Report');
+    };
+
     const currentMemberStat = stats.find(s => s.member.name === selectedOtMember) || stats[0];
 
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2"><Clock className="w-5 h-5 text-primary"/> Overtime Tracker</h3>
-            <p className="text-xs text-muted-foreground">Detailed calculation including physical vs formulated hours.</p>
+            <div className="flex items-center gap-3">
+              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2"><Clock className="w-5 h-5 text-primary"/> Overtime Tracker</h3>
+              <div className="hidden sm:flex items-center gap-2 border-l border-border pl-3 ml-1">
+                 <button onClick={() => exportOt('excel')} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border border-green-600/20 text-green-600 hover:bg-green-600/10 transition-colors"><Download className="w-3.5 h-3.5"/> Excel</button>
+                 <button onClick={() => exportOt('pdf')} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border border-red-600/20 text-red-600 hover:bg-red-600/10 transition-colors"><Download className="w-3.5 h-3.5"/> PDF</button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Detailed calculation including physical vs formulated hours.</p>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-48 w-full">
@@ -315,9 +375,9 @@ export default function AttendancePage() {
               <input placeholder="Search member..." value={otSearch} onChange={e => setOtSearch(e.target.value)} className="w-full bg-surface border border-border rounded-lg pl-9 pr-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <select value={otMonthOffset} onChange={e => setOtMonthOffset(Number(e.target.value))} className="bg-surface border border-border w-full sm:w-auto rounded-lg px-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none cursor-pointer">
-              <option value="0">Current Cut-off ({format(endOfCutoff, 'MMM yyyy')})</option>
-              <option value="1">Last Month ({format(subMonths(endOfCutoff, 1), 'MMM yyyy')})</option>
-              <option value="2">2 Months Ago ({format(subMonths(endOfCutoff, 2), 'MMM yyyy')})</option>
+              {Array.from({ length: 12 }).map((_, i) => (
+                <option key={i} value={i}>{i === 0 ? 'Current Cut-off' : `Cut-off`} ({format(subMonths(new Date(), i), 'MMM yyyy')})</option>
+              ))}
             </select>
             <button onClick={() => { setEditingOtLog(null); setIsOtModalOpen(true); }} className="px-4 py-2 w-full sm:w-auto bg-primary text-primary-foreground text-sm font-medium rounded-lg shadow whitespace-nowrap hover:bg-primary/90">
               + Add Overtime
@@ -336,13 +396,16 @@ export default function AttendancePage() {
                   onClick={() => setSelectedOtMember(s.member.name)}
                   className={`flex flex-col items-start px-4 py-3 rounded-xl border transition-all flex-shrink-0 w-[200px] lg:w-auto
                     ${selectedOtMember === s.member.name 
-                      ? 'bg-primary/10 border-primary text-primary shadow-sm' 
-                      : 'bg-surface border-border text-foreground hover:bg-muted/50'}`}
+                      ? 'bg-primary/10 border-primary shadow-sm' 
+                      : 'bg-surface border-border hover:bg-muted/50'}`}
                 >
-                  <div className="font-semibold text-sm truncate w-full text-left">{s.member.name}</div>
+                  <div className={`font-semibold text-sm truncate w-full text-left ${selectedOtMember === s.member.name ? 'text-primary' : 'text-foreground'}`}>{s.member.name}</div>
                   <div className="flex justify-between w-full mt-2 items-end">
-                    <span className="text-[10px] opacity-80">{s.member.role}</span>
-                    <span className={`text-xs font-bold ${s.periodOt > 0 ? '' : 'opacity-50'}`}>{s.periodOt.toFixed(1)}h</span>
+                    <span className="text-[10px] text-muted-foreground mr-2 truncate">{s.member.role}</span>
+                    <div className="flex flex-col items-end gap-0.5 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5"><span className="text-[8px] font-bold text-muted-foreground uppercase opacity-70">Mati</span><span className={`text-xs font-bold leading-none ${selectedOtMember === s.member.name ? 'text-primary' : 'text-foreground'}`}>{s.periodOt.toFixed(1)}h</span></div>
+                      <div className="flex items-center gap-1.5"><span className="text-[8px] font-bold text-muted-foreground uppercase opacity-70">Hidup</span><span className={`text-xs font-bold leading-none ${selectedOtMember === s.member.name ? 'text-primary' : 'text-foreground'}`}>{s.periodOtHidup.toFixed(1)}h</span></div>
+                    </div>
                   </div>
                 </button>
               ))}
@@ -509,10 +572,23 @@ export default function AttendancePage() {
       };
     });
 
+    const exportLeaves = (type: 'excel' | 'pdf') => {
+      const headers = ['Applicant', 'Type', 'Application Date', 'Duration', 'Start', 'End', 'Status'];
+      const dataObj: Record<string, string | number>[] = leaves.map(l => ({ 'Applicant': l.member_name, 'Type': l.leave_type, 'Application Date': l.application_date, 'Duration': `${l.days_count} Days`, 'Start': l.start_date, 'End': l.end_date, 'Status': l.status }));
+      if (type === 'excel') exportToExcel(dataObj, `Leave_Report_${Date.now()}`);
+      else exportToPdf(headers, dataObj.map((obj: Record<string, string | number>) => headers.map(h => obj[h] || '')), `Leave_Report_${Date.now()}`, 'Leave Management Report');
+    };
+
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2"><FileText className="w-5 h-5 text-primary"/> Leave Management</h3>
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2"><FileText className="w-5 h-5 text-primary"/> Leave Management</h3>
+            <div className="hidden sm:flex items-center gap-2 border-l border-border pl-3 ml-1">
+               <button onClick={() => exportLeaves('excel')} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border border-green-600/20 text-green-600 hover:bg-green-600/10 transition-colors"><Download className="w-3.5 h-3.5"/> Excel</button>
+               <button onClick={() => exportLeaves('pdf')} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border border-red-600/20 text-red-600 hover:bg-red-600/10 transition-colors"><Download className="w-3.5 h-3.5"/> PDF</button>
+            </div>
+          </div>
           <button onClick={() => setIsLeaveModalOpen(true)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-medium rounded-lg shadow-sm">
             Apply for Leave
           </button>
