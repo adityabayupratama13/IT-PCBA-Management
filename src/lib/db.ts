@@ -127,6 +127,38 @@ function initSchema(db: Database.Database) {
       value TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS attendance_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      member_name TEXT NOT NULL,
+      date TEXT NOT NULL,
+      shift TEXT NOT NULL DEFAULT 'Off',
+      overtime_hours REAL DEFAULT 0,
+      overtime_desc TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS leave_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      member_name TEXT NOT NULL,
+      leave_type TEXT NOT NULL,
+      application_date TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      days_count INTEGER NOT NULL,
+      reason TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'Pending',
+      approved_by TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS leave_balances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      member_name TEXT NOT NULL,
+      year INTEGER NOT NULL,
+      annual_total INTEGER DEFAULT 12,
+      annual_used INTEGER DEFAULT 0
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee);
@@ -137,11 +169,14 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_members_badge ON members(badge);
     CREATE INDEX IF NOT EXISTS idx_positions_division ON positions(division);
     CREATE INDEX IF NOT EXISTS idx_positions_level ON positions(level);
+    CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance_logs(date);
+    CREATE INDEX IF NOT EXISTS idx_attendance_member ON attendance_logs(member_name);
   `);
 
   // Migrations — safe to run repeatedly (will silently fail if column exists)
-  try { db.exec(`ALTER TABLE members ADD COLUMN grade TEXT DEFAULT ''`); } catch { /* column exists */ }
-  try { db.exec(`ALTER TABLE tasks ADD COLUMN ticket_id TEXT DEFAULT ''`); } catch { /* column exists */ }
+  try { db.exec('ALTER TABLE schedules ADD COLUMN end_date TEXT DEFAULT ""'); } catch { /* ignore if already exists */ }
+  try { db.exec('ALTER TABLE members ADD COLUMN grade TEXT DEFAULT ""'); } catch { /* column exists */ }
+  try { db.exec('ALTER TABLE tasks ADD COLUMN ticket_id TEXT DEFAULT ""'); } catch { /* column exists */ }
 }
 
 /**
