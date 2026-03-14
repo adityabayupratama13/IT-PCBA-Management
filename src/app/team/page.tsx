@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useAuth, type Member } from '@/context/AuthContext';
 import Link from 'next/link';
 
-interface Position { id: number; name: string; }
+interface Position { id: number; name: string; description: string; }
 
 // Color by role hash
 function roleBadgeStyle(role: string): string {
@@ -41,7 +41,19 @@ export default function TeamPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
+  const [viewingMember, setViewingMember] = useState<Member | null>(null);
   const [showPw, setShowPw] = useState(false);
+
+  const getDescriptionsList = (descStr?: string): { id: number, text: string }[] => {
+    if (!descStr) return [];
+    try {
+      const parsed = JSON.parse(descStr);
+      if (Array.isArray(parsed)) return parsed;
+      return [{ id: Date.now(), text: descStr }];
+    } catch {
+      return [{ id: Date.now(), text: descStr }];
+    }
+  };
 
   const filtered = allMembers.filter(m => {
     const q = search.toLowerCase();
@@ -131,7 +143,7 @@ export default function TeamPage() {
     {
       header: 'Actions',
       accessor: (m: Member) => (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
           <button onClick={() => openEditModal(m)} className="text-muted-foreground hover:text-primary transition-colors" title="Edit"><Edit2 className="w-4 h-4" /></button>
           <button onClick={() => setDeleteTarget(m)} className="text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-4 h-4" /></button>
         </div>
@@ -168,7 +180,103 @@ export default function TeamPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} data={filtered} keyExtractor={m => m.id} />
+      <DataTable columns={columns} data={filtered} keyExtractor={m => m.id} onRowClick={m => setViewingMember(m)} />
+
+      {/* Profile/Job Details Modal */}
+      <Modal isOpen={!!viewingMember} onClose={() => setViewingMember(null)} title="Member Profile & Responsibilities" maxWidth="max-w-4xl">
+        {viewingMember && (() => {
+          const positionData = positions.find(p => p.name === viewingMember.role);
+          const list = getDescriptionsList(positionData?.description);
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-2">
+              {/* Left Column: Personal Member Details */}
+              <div className="flex flex-col gap-4">
+                <div className="p-4 rounded-xl border" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/30 to-secondary/30 flex items-center justify-center text-primary font-bold text-xl border border-primary/20 flex-shrink-0 shadow-sm">
+                        {viewingMember.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-foreground leading-tight">{viewingMember.name}</h3>
+                        <p className="text-xs text-muted-foreground font-mono mt-0.5">{viewingMember.badge}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
+                    <div>
+                      <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Role / Job Title</span>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border inline-block ${roleBadgeStyle(viewingMember.role)}`}>{viewingMember.role}</span>
+                    </div>
+                    {viewingMember.grade && (
+                      <div>
+                        <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Grade</span>
+                        <span className="text-sm font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 inline-block">{viewingMember.grade}</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Division</span>
+                      <span className="text-sm text-foreground">{viewingMember.division}</span>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Status</span>
+                      <span className="flex items-center gap-2 text-sm text-foreground">
+                        <span className={`w-2 h-2 rounded-full ${viewingMember.status === 'Active' ? 'bg-success shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-muted-foreground'}`} />
+                        {viewingMember.status}
+                      </span>
+                    </div>
+                    {viewingMember.email && (
+                      <div>
+                        <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Email</span>
+                        <a href={`mailto:${viewingMember.email}`} className="text-sm text-primary hover:underline font-medium">{viewingMember.email}</a>
+                      </div>
+                    )}
+                    {viewingMember.phone && (
+                      <div>
+                        <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Phone</span>
+                        <a href={`tel:${viewingMember.phone}`} className="text-sm text-primary hover:underline font-medium">{viewingMember.phone}</a>
+                      </div>
+                    )}
+                    <div>
+                      <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Join Date</span>
+                      <span className="text-sm text-foreground">{new Date(viewingMember.created_at || new Date()).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric'})}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Job Responsibilities (Read Only view sourced from Positions) */}
+              <div className="md:col-span-2 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
+                  <h3 className="text-base font-semibold text-foreground">Job Scope & Responsibilities</h3>
+                  <Link href="/positions" className="text-xs flex items-center gap-1.5 text-primary hover:bg-primary/10 px-2.5 py-1.5 rounded-lg transition-colors border border-transparent hover:border-primary/20">
+                    <Edit2 className="w-3.5 h-3.5" /> Edit in Positions Master
+                  </Link>
+                </div>
+                
+                {list.length === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground border border-dashed rounded-xl" style={{ borderColor: 'var(--border)' }}>
+                    No job descriptions assigned for <strong className="text-foreground">{viewingMember.role}</strong> yet.
+                  </div>
+                ) : (
+                  <div className="border rounded-xl divide-y overflow-hidden shadow-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+                    <div className="max-h-[50vh] overflow-y-auto divide-y" style={{ borderColor: 'var(--border)' }}>
+                      {list.map((item, idx) => (
+                        <div key={item.id || idx} className="flex items-start gap-4 p-4 hover:bg-muted/30 transition-colors">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold border border-primary/20 mt-0.5">{idx+1}</span>
+                          <p className="text-sm text-foreground/90 leading-relaxed pt-1">{item.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
 
       {/* Link to Positions */}
       <Link href="/positions" className="flex items-center gap-3 p-3 rounded-xl border border-border bg-surface hover:bg-muted/30 transition-colors text-sm">

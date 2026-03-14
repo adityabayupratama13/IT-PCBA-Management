@@ -119,17 +119,13 @@ export default function PositionsPage() {
       header: 'Description',
       accessor: (p: Position) => {
         const list = getDescriptionsList(p.description);
-        return (
-          <button onClick={() => setManagingDesc(p)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-semibold">
-            {list.length} Details
-          </button>
-        );
+        return <span className="text-sm text-muted-foreground">{list.length} Details</span>;
       }
     },
     {
       header: 'Actions',
       accessor: (p: Position) => (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => openEditModal(p)} className="text-muted-foreground hover:text-primary transition-colors"><Edit2 className="w-4 h-4" /></button>
           <button onClick={() => setDeleteTarget(p)} className="text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-4 h-4" /></button>
         </div>
@@ -164,7 +160,7 @@ export default function PositionsPage() {
         </select>
       </div>
 
-      <DataTable columns={columns} data={filtered} keyExtractor={p => p.id} />
+      <DataTable columns={columns} data={filtered} keyExtractor={p => p.id} onRowClick={(p) => setManagingDesc(p)} />
 
       {/* Info */}
       <div className="flex items-center gap-3 p-3 rounded-xl border border-border text-sm" style={{ background: 'var(--surface)' }}>
@@ -204,7 +200,7 @@ export default function PositionsPage() {
       </Modal>
 
       {/* Job Descriptions Modal */}
-      <Modal isOpen={!!managingDesc} onClose={() => { setManagingDesc(null); setNewDescText(''); }} title={`Job Details: ${managingDesc?.name}`}>
+      <Modal isOpen={!!managingDesc} onClose={() => { setManagingDesc(null); setNewDescText(''); }} title={`Position Profile: ${managingDesc?.name}`} maxWidth="max-w-4xl">
         {managingDesc && (() => {
           const list = getDescriptionsList(managingDesc.description);
           
@@ -223,30 +219,78 @@ export default function PositionsPage() {
              if (res) { setManagingDesc({ ...managingDesc, description: JSON.stringify(newList) }); toast.success('Detail deleted'); }
           };
 
-          return (
-            <div className="space-y-4 pb-2">
-              <form onSubmit={handleAddDesc} className="flex gap-2">
-                <input value={newDescText} onChange={e => setNewDescText(e.target.value)} placeholder="Type new job responsibility..." className={inputClass} />
-                <button type="submit" className="px-4 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 flex-shrink-0 transition-colors">Add</button>
-              </form>
+          const formatDate = (ts: number) => {
+            if (!ts || ts < 1000000000000) return 'Legacy Data';
+            const d = new Date(ts);
+            return `${d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })} ${d.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' })}`;
+          };
 
-              {list.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground border border-dashed rounded-xl" style={{ borderColor: 'var(--border)' }}>No job details added yet.</div>
-              ) : (
-                <div className="border rounded-xl divide-y overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
-                  <div className="max-h-[50vh] overflow-y-auto divide-y" style={{ borderColor: 'var(--border)' }}>
-                    {list.map((item, idx) => (
-                      <div key={item.id || idx} className="flex justify-between items-start gap-4 p-3 hover:bg-muted/30 transition-colors">
-                        <div className="flex gap-3">
-                          <span className="text-muted-foreground font-mono text-xs mt-0.5">{idx+1}.</span>
-                          <p className="text-sm text-foreground/90 leading-snug">{item.text}</p>
-                        </div>
-                        <button onClick={() => handleDeleteDesc(item.id)} className="text-muted-foreground hover:text-destructive flex-shrink-0 p-1 opacity-60 hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-2">
+              {/* Left Column: Details */}
+              <div className="flex flex-col gap-4">
+                <div className="p-4 rounded-xl border" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 mb-3">
+                    <Briefcase className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-bold text-foreground mb-1">{managingDesc.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-4">{managingDesc.division}</p>
+                  
+                  <div className="space-y-3 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+                    <div>
+                      <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Level</span>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border inline-block ${LEVEL_COLORS[managingDesc.level] || LEVEL_COLORS.Staff}`}>
+                        {managingDesc.level}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Responsibilities</span>
+                      <span className="text-sm font-medium text-foreground">{list.length} Items</span>
+                    </div>
+                    {managingDesc.created_at && (
+                      <div>
+                        <span className="block text-xs text-muted-foreground uppercase tracking-wider mb-1">Created Date</span>
+                        <span className="text-sm font-medium text-foreground">
+                          {new Date(managingDesc.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </span>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
-              )}
+              </div>
+
+              {/* Right Column: Descriptions List */}
+              <div className="md:col-span-2 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-foreground">Job Responsibilities & Descriptions</h3>
+                </div>
+                
+                <form onSubmit={handleAddDesc} className="flex gap-2">
+                  <input value={newDescText} onChange={e => setNewDescText(e.target.value)} placeholder="Type new job responsibility..." className={inputClass} />
+                  <button type="submit" className="px-5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 flex-shrink-0 transition-colors shadow-sm">Add Item</button>
+                </form>
+
+                {list.length === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground border border-dashed rounded-xl" style={{ borderColor: 'var(--border)' }}>No job details added yet. Format requires action points.</div>
+                ) : (
+                  <div className="border rounded-xl divide-y overflow-hidden shadow-sm" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+                    <div className="max-h-[50vh] overflow-y-auto divide-y" style={{ borderColor: 'var(--border)' }}>
+                      {list.map((item, idx) => (
+                        <div key={item.id || idx} className="flex justify-between items-start gap-4 p-4 hover:bg-muted/30 transition-colors group">
+                          <div className="flex gap-3">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold border border-primary/20">{idx+1}</span>
+                            <div>
+                              <p className="text-sm text-foreground/90 leading-snug">{item.text}</p>
+                              <p className="text-[10px] text-muted-foreground mt-1.5 opacity-60">Last Edited: {formatDate(item.id)}</p>
+                            </div>
+                          </div>
+                          <button onClick={() => handleDeleteDesc(item.id)} className="text-muted-foreground hover:text-destructive flex-shrink-0 p-1.5 bg-background rounded-md border border-border opacity-0 group-hover:opacity-100 transition-all shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           );
         })()}

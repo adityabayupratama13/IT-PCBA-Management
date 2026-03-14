@@ -10,9 +10,10 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   keyExtractor?: (item: T) => string | number;
+  onRowClick?: (item: T) => void;
 }
 
-export function DataTable<T>({ columns, data, keyExtractor }: DataTableProps<T>) {
+export function DataTable<T>({ columns, data, keyExtractor, onRowClick }: DataTableProps<T>) {
   if (data.length === 0) {
     return (
       <div className="rounded-2xl p-12 text-center border" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
@@ -41,8 +42,9 @@ export function DataTable<T>({ columns, data, keyExtractor }: DataTableProps<T>)
           <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
             {data.map((item, idx) => (
               <tr key={keyExtractor ? keyExtractor(item) : idx}
-                className="transition-colors group"
+                className={`transition-colors group ${onRowClick ? 'cursor-pointer' : ''}`}
                 style={{}}
+                onClick={() => onRowClick && onRowClick(item)}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--muted)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = '')}
               >
