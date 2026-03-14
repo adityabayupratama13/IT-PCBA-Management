@@ -12,12 +12,13 @@ const NAV_ITEMS = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { label: 'Team', href: '/team', icon: Users },
   { label: 'Jabatan', href: '/positions', icon: Briefcase },
-  { label: 'Tasks', href: '/tasks', icon: CheckSquare },
-  { label: 'Assets', href: '/assets', icon: Monitor, external: 'http://10.0.2.212:3001' },
   { label: 'Tickets', href: '/tickets', icon: Tickets },
-  { label: 'Daily Log', href: '/daily', icon: CalendarDays },
-  { label: 'Schedule', href: '/schedule', icon: CalendarClock },
+  { label: 'Tasks', href: '/tasks', icon: CheckSquare },
   { label: 'Projects', href: '/projects', icon: FolderKanban },
+  { label: 'Schedule', href: '/schedule', icon: CalendarClock },
+  { label: 'Assets', href: '/assets', icon: Monitor, external: 'http://10.0.2.212:3001' },
+  { label: 'Attendance', href: '/attendance', icon: CalendarDays }, // Using CalendarDays for Attendance temporarily, adjust if needed
+  { label: 'Daily Log', href: '/daily', icon: CalendarDays },
   { label: 'Audit Log', href: '/audit', icon: History },
 ];
 
@@ -40,7 +41,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             <span className="text-white font-bold text-sm">IT</span>
           </div>
           <div>
-            <div className="font-bold text-foreground text-base leading-none">IT MGT</div>
+            <div className="font-bold text-foreground text-sm xl:text-base leading-none">IT Management Apps</div>
             <div className="text-[10px] text-muted-foreground mt-0.5 leading-none">Dashboard</div>
           </div>
         </div>
