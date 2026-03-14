@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, AlertCircle, Edit2, Trash2, Plus, ChevronLeft, ChevronRight, FileDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -33,6 +33,10 @@ export default function TicketsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const { currentUser } = useAuth();
+
+  useEffect(() => {
+    setFilterDate(new Date().toISOString().split('T')[0]);
+  }, []);
 
   const navigateDate = (days: number) => {
     if (!filterDate) {

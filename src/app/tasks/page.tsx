@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Calendar as CalendarIcon, Users, Check, ChevronLeft, ChevronRight, FileDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -45,6 +45,10 @@ export default function TasksPage() {
   const [filterDate, setFilterDate] = useState<string>(''); // For daily filter
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+
+  useEffect(() => {
+    setFilterDate(new Date().toISOString().split('T')[0]);
+  }, []);
 
   const navigateDate = (days: number) => {
     if (!filterDate) {

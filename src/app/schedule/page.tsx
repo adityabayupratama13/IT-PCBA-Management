@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useApi } from '@/hooks/useApi';
 
-type ScheduleType = 'Meeting' | 'Maintenance' | 'On-Call' | 'Training' | 'Deployment' | 'Other';
+type ScheduleType = 'Meeting' | 'Maintenance' | 'On-Call' | 'Training' | 'Deployment' | 'Other' | 'Project';
 type Recurrence = 'one-time' | 'daily' | 'weekly' | 'monthly' | 'yearly';
 type ViewMode = 'week' | 'month' | 'year';
 
@@ -174,6 +174,7 @@ export default function SchedulePage() {
       case 'On-Call':     return { bg: '#7C3AED', text: '#ffffff', border: 'rgba(124,58,237,0.5)' };
       case 'Training':    return { bg: '#0D9488', text: '#ffffff', border: 'rgba(13,148,136,0.5)' };
       case 'Deployment':  return { bg: '#0891B2', text: '#ffffff', border: 'rgba(8,145,178,0.5)' };
+      case 'Project':     return { bg: '#10B981', text: '#000000', border: 'rgba(16,185,129,0.6)' };
       case 'Other':       return { bg: '#64748B', text: '#ffffff', border: 'rgba(100,116,139,0.5)' };
       default:            return { bg: 'var(--surface-2)', text: 'var(--foreground)', border: 'var(--border)' };
     }
@@ -210,6 +211,7 @@ export default function SchedulePage() {
       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]" /><span className="text-muted-foreground font-medium">Meeting</span></div>
       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]" /><span className="text-muted-foreground font-medium">Maintenance</span></div>
       <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-violet-500 shadow-[0_0_8px_rgba(139,92,246,0.6)]" /><span className="text-muted-foreground font-medium">On-Call</span></div>
+      <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" /><span className="text-muted-foreground font-medium">Project</span></div>
     </div>
   );
 

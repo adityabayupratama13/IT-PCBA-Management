@@ -34,6 +34,19 @@ export default function PositionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<Position | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Position | null>(null);
+  const [managingDesc, setManagingDesc] = useState<Position | null>(null);
+  const [newDescText, setNewDescText] = useState('');
+
+  const getDescriptionsList = (descStr: string): { id: number, text: string }[] => {
+    if (!descStr) return [];
+    try {
+      const parsed = JSON.parse(descStr);
+      if (Array.isArray(parsed)) return parsed;
+      return [{ id: Date.now(), text: descStr }];
+    } catch {
+      return [{ id: Date.now(), text: descStr }];
+    }
+  };
 
   const filtered = positions.filter(p => {
     const q = search.toLowerCase();
@@ -59,7 +72,7 @@ export default function PositionsPage() {
       name: (fd.get('name') as string).trim(),
       division: fd.get('division') as string,
       level: fd.get('level') as string,
-      description: (fd.get('description') as string).trim(),
+      description: editingPosition ? editingPosition.description : '[]',
       userName: currentUser?.name || 'System',
     };
     if (!payload.name) { toast.error('Name required'); return; }
@@ -102,7 +115,17 @@ export default function PositionsPage() {
         </span>
       )
     },
-    { header: 'Description', accessor: (p: Position) => <span className="text-sm text-muted-foreground line-clamp-1 max-w-xs">{p.description || '—'}</span> },
+    {
+      header: 'Description',
+      accessor: (p: Position) => {
+        const list = getDescriptionsList(p.description);
+        return (
+          <button onClick={() => setManagingDesc(p)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-semibold">
+            {list.length} Details
+          </button>
+        );
+      }
+    },
     {
       header: 'Actions',
       accessor: (p: Position) => (
@@ -170,11 +193,6 @@ export default function PositionsPage() {
               </select>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-1.5">Description</label>
-            <textarea name="description" rows={3} defaultValue={editingPosition?.description} placeholder="Job responsibilities..."
-              className={inputClass + ' resize-none'} />
-          </div>
           <div className="pt-4 flex justify-end gap-3 border-t" style={{ borderColor: 'var(--border)' }}>
             <button type="button" onClick={() => setIsModalOpen(false)}
               className="px-4 py-2 rounded-xl text-sm font-medium text-foreground border hover:bg-primary/5 transition-colors" style={{ borderColor: 'var(--border)' }}>Cancel</button>
@@ -183,6 +201,55 @@ export default function PositionsPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Job Descriptions Modal */}
+      <Modal isOpen={!!managingDesc} onClose={() => { setManagingDesc(null); setNewDescText(''); }} title={`Job Details: ${managingDesc?.name}`}>
+        {managingDesc && (() => {
+          const list = getDescriptionsList(managingDesc.description);
+          
+          const handleAddDesc = async (e?: React.FormEvent) => {
+             e?.preventDefault();
+             if (!newDescText.trim()) return;
+             const newList = [...list, { id: Date.now(), text: newDescText.trim() }];
+             setNewDescText('');
+             const res = await update({ ...managingDesc, description: JSON.stringify(newList) } as unknown as Position & Record<string, unknown>);
+             if (res) { setManagingDesc({ ...managingDesc, description: JSON.stringify(newList) }); toast.success('Detail added'); }
+          };
+
+          const handleDeleteDesc = async (id: number) => {
+             const newList = list.filter(d => d.id !== id);
+             const res = await update({ ...managingDesc, description: JSON.stringify(newList) } as unknown as Position & Record<string, unknown>);
+             if (res) { setManagingDesc({ ...managingDesc, description: JSON.stringify(newList) }); toast.success('Detail deleted'); }
+          };
+
+          return (
+            <div className="space-y-4 pb-2">
+              <form onSubmit={handleAddDesc} className="flex gap-2">
+                <input value={newDescText} onChange={e => setNewDescText(e.target.value)} placeholder="Type new job responsibility..." className={inputClass} />
+                <button type="submit" className="px-4 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 flex-shrink-0 transition-colors">Add</button>
+              </form>
+
+              {list.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground border border-dashed rounded-xl" style={{ borderColor: 'var(--border)' }}>No job details added yet.</div>
+              ) : (
+                <div className="border rounded-xl divide-y overflow-hidden" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+                  <div className="max-h-[50vh] overflow-y-auto divide-y" style={{ borderColor: 'var(--border)' }}>
+                    {list.map((item, idx) => (
+                      <div key={item.id || idx} className="flex justify-between items-start gap-4 p-3 hover:bg-muted/30 transition-colors">
+                        <div className="flex gap-3">
+                          <span className="text-muted-foreground font-mono text-xs mt-0.5">{idx+1}.</span>
+                          <p className="text-sm text-foreground/90 leading-snug">{item.text}</p>
+                        </div>
+                        <button onClick={() => handleDeleteDesc(item.id)} className="text-muted-foreground hover:text-destructive flex-shrink-0 p-1 opacity-60 hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </Modal>
 
       <ConfirmDialog isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete}
