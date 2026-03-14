@@ -1,6 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { Plus, Search, Calendar as CalendarIcon, Users, Check } from 'lucide-react';
+import { Plus, Search, Calendar as CalendarIcon, Users, Check, ChevronLeft, ChevronRight, FileDown } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { KanbanColumn, KanbanCard } from '@/components/KanbanBoard';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
@@ -42,6 +45,36 @@ export default function TasksPage() {
   const [filterDate, setFilterDate] = useState<string>(''); // For daily filter
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+
+  const navigateDate = (days: number) => {
+    if (!filterDate) {
+      const today = new Date();
+      setFilterDate(today.toISOString().split('T')[0]);
+      return;
+    }
+    const d = new Date(filterDate);
+    d.setUTCDate(d.getUTCDate() + days);
+    setFilterDate(d.toISOString().split('T')[0]);
+  };
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.text('Task Tracking Report', 14, 15);
+    const tableData = filteredTasks.map(t => [t.id, t.title, t.status, t.priority, t.assignee, t.due_date ? new Date(t.due_date).toLocaleDateString() : '-']);
+    autoTable(doc, { startY: 20, head: [['ID', 'Title', 'Status', 'Priority', 'Assignees', 'Due Date']], body: tableData });
+    doc.save(`Tasks_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success('PDF Exported');
+  };
+
+  const exportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredTasks.map(t => ({ 
+      ID: t.id, Title: t.title, Status: t.status, Priority: t.priority, Assignees: t.assignee, 'Due Date': t.due_date, Resolution: t.resolution 
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Tasks');
+    XLSX.writeFile(wb, `Tasks_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success('Excel Exported');
+  };
 
   const filteredTasks = tasks.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase());
@@ -143,20 +176,32 @@ export default function TasksPage() {
           <h1 className="text-3xl font-bold text-foreground">Task Tracking</h1>
           <p className="text-muted-foreground mt-1">Kanban board — {tasks.length} tasks</p>
         </div>
-        <button onClick={() => openAddModal()} className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-lg font-medium transition-colors shadow-sm">
-          <Plus className="w-4 h-4" /> Add Task
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={exportPDF} className="flex items-center gap-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground px-3 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm" title="Export to PDF">
+            <FileDown className="w-4 h-4" /> PDF
+          </button>
+          <button onClick={exportExcel} className="flex items-center gap-2 bg-[#107c41] hover:bg-[#107c41]/90 text-white px-3 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm" title="Export to Excel">
+            <FileDown className="w-4 h-4" /> Excel
+          </button>
+          <button onClick={() => openAddModal()} className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-lg font-medium transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> Add Task
+          </button>
+        </div>
       </div>
 
       {/* Date Filter */}
       <div className="flex bg-surface p-3 rounded-lg border border-border items-center gap-3">
         <label className="text-sm font-medium text-foreground whitespace-nowrap">Daily Filter :</label>
-        <input 
-          type="date" 
-          value={filterDate} 
-          onChange={e => setFilterDate(e.target.value)} 
-          className="bg-background border border-border rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-        />
+        <div className="flex items-center gap-1">
+          <button onClick={() => navigateDate(-1)} className="p-1 hover:bg-secondary rounded text-muted-foreground transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+          <input 
+            type="date" 
+            value={filterDate} 
+            onChange={e => setFilterDate(e.target.value)} 
+            className="bg-background border border-border rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <button onClick={() => navigateDate(1)} className="p-1 hover:bg-secondary rounded text-muted-foreground transition-colors"><ChevronRight className="w-4 h-4" /></button>
+        </div>
         {filterDate && (
           <button onClick={() => setFilterDate('')} className="text-xs text-muted-foreground hover:text-foreground">Clear</button>
         )}

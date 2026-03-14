@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
     const taskTitle = `[${id}] ${body.title}`;
     const taskStatus = body.status || 'Backlog';
     const taskPriority = body.priority === 'Critical' ? 'High' : (body.priority || 'Medium');
-    const assignee = body.reporter || body.userName || 'Unassigned';
-    const initials = assignee.substring(0, 2).toUpperCase();
+    const assignee = 'Unassigned';
+    const initials = 'UN';
     db.prepare('INSERT INTO tasks (title, status, priority, assignee, initials, due_date, ticket_id, resolution, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
       taskTitle, taskStatus, taskPriority, assignee, initials, '', id, body.resolution || '', body.attachments || '[]'
     );

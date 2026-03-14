@@ -1,6 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { Search, AlertCircle, Edit2, Trash2, Plus } from 'lucide-react';
+import { Search, AlertCircle, Edit2, Trash2, Plus, ChevronLeft, ChevronRight, FileDown } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { DataTable } from '@/components/DataTable';
 import { Modal, ConfirmDialog } from '@/components/Modal';
 import { toast } from 'sonner';
@@ -30,6 +33,36 @@ export default function TicketsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const { currentUser } = useAuth();
+
+  const navigateDate = (days: number) => {
+    if (!filterDate) {
+      const today = new Date();
+      setFilterDate(today.toISOString().split('T')[0]);
+      return;
+    }
+    const d = new Date(filterDate);
+    d.setUTCDate(d.getUTCDate() + days);
+    setFilterDate(d.toISOString().split('T')[0]);
+  };
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.text('Help Desk Tickets Report', 14, 15);
+    const tableData = filteredTickets.map(t => [t.id, t.title, t.reporter, t.priority, t.status, new Date(t.created_date).toLocaleDateString()]);
+    autoTable(doc, { startY: 20, head: [['ID', 'Title', 'Reporter', 'Priority', 'Status', 'Created Date']], body: tableData });
+    doc.save(`Tickets_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success('PDF Exported');
+  };
+
+  const exportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredTickets.map(t => ({ 
+      ID: t.id, Title: t.title, Reporter: t.reporter, Priority: t.priority, Status: t.status, 'Created Date': new Date(t.created_date).toLocaleString(), Resolution: t.resolution 
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Tickets');
+    XLSX.writeFile(wb, `Tickets_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success('Excel Exported');
+  };
 
   let filteredTickets = tickets.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase());
@@ -172,9 +205,17 @@ export default function TicketsPage() {
           <h1 className="text-3xl font-bold text-foreground">Help Desk Tickets</h1>
           <p className="text-muted-foreground mt-1">Track IT support requests — {tickets.length} tickets</p>
         </div>
-        <button onClick={openAddModal} className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-lg font-medium transition-colors shadow-sm">
-          <Plus className="w-4 h-4" /> New Ticket
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={exportPDF} className="flex items-center gap-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground px-3 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm" title="Export to PDF">
+            <FileDown className="w-4 h-4" /> PDF
+          </button>
+          <button onClick={exportExcel} className="flex items-center gap-2 bg-[#107c41] hover:bg-[#107c41]/90 text-white px-3 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm" title="Export to Excel">
+            <FileDown className="w-4 h-4" /> Excel
+          </button>
+          <button onClick={openAddModal} className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-lg font-medium transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> New Ticket
+          </button>
+        </div>
       </div>
 
       {/* Info: Workflow */}
@@ -185,12 +226,16 @@ export default function TicketsPage() {
 
       <div className="flex bg-surface p-3 rounded-lg border border-border items-center gap-3">
         <label className="text-sm font-medium text-foreground whitespace-nowrap">Daily Filter :</label>
-        <input 
-          type="date" 
-          value={filterDate} 
-          onChange={e => setFilterDate(e.target.value)} 
-          className="bg-background border border-border rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-        />
+        <div className="flex items-center gap-1">
+          <button onClick={() => navigateDate(-1)} className="p-1 hover:bg-secondary rounded text-muted-foreground transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+          <input 
+            type="date" 
+            value={filterDate} 
+            onChange={e => setFilterDate(e.target.value)} 
+            className="bg-background border border-border rounded-md px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <button onClick={() => navigateDate(1)} className="p-1 hover:bg-secondary rounded text-muted-foreground transition-colors"><ChevronRight className="w-4 h-4" /></button>
+        </div>
         {filterDate && (
           <button onClick={() => setFilterDate('')} className="text-xs text-muted-foreground hover:text-foreground">Clear</button>
         )}
