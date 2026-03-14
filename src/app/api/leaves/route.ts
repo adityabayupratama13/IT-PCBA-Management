@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
@@ -42,7 +43,10 @@ export async function PUT(req: NextRequest) {
     const currTarget = new Date(existing.start_date);
     const endDateObj = new Date(existing.end_date);
     while (currTarget <= endDateObj) {
-      const dStr = currTarget.toISOString().split('T')[0];
+      const yyyy = currTarget.getFullYear();
+      const mm = String(currTarget.getMonth() + 1).padStart(2, '0');
+      const dd = String(currTarget.getDate()).padStart(2, '0');
+      const dStr = `${yyyy}-${mm}-${dd}`;
       // Skip weekends for shift replacements if you prefer, but standard is insert over all days
       
       const attns = db.prepare('SELECT id FROM attendance_logs WHERE member_name = ? AND date = ?').get(existing.member_name, dStr) as { id: number } | undefined;
