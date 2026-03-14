@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CalendarDays, Clock, FileText, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Search, User, Download } from 'lucide-react';
+import { CalendarDays, Clock, FileText, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Search, User, Download, Edit, Trash2 } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { format, addDays, startOfWeek, subMonths, setDate, isWithinInterval } from 'date-fns';
@@ -50,6 +50,7 @@ export default function AttendancePage() {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [editingBalanceMember, setEditingBalanceMember] = useState('');
+  const [editingLeaveLog, setEditingLeaveLog] = useState<LeaveReq | null>(null);
   const [viewingLeave, setViewingLeave] = useState<LeaveReq | null>(null);
   
   const handleShiftChange = async (memberName: string, date: string, newShift: string) => {
@@ -526,15 +527,31 @@ export default function AttendancePage() {
     e.preventDefault();
     const fd = new FormData(e.target as HTMLFormElement);
     try {
-      await createLeave({
-        member_name: fd.get('member_name') as string, leave_type: fd.get('leave_type') as string,
-        application_date: new Date().toISOString().split('T')[0], start_date: fd.get('start_date') as string, 
-        end_date: fd.get('end_date') as string, days_count: Number(fd.get('days_count')), reason: fd.get('reason') as string,
-        userName: currentUser?.name || ''
-      });
-      toast.success('Leave application submitted');
+      if (editingLeaveLog) {
+        await updateLeave({
+          id: editingLeaveLog.id,
+          leave_type: fd.get('leave_type') as string,
+          start_date: fd.get('start_date') as string,
+          end_date: fd.get('end_date') as string,
+          days_count: Number(fd.get('days_count')),
+          reason: fd.get('reason') as string,
+          userName: currentUser?.name || ''
+        });
+        toast.success('Leave updated successfully');
+      } else {
+        await createLeave({
+          member_name: fd.get('member_name') as string, leave_type: fd.get('leave_type') as string,
+          application_date: new Date().toISOString().split('T')[0], start_date: fd.get('start_date') as string, 
+          end_date: fd.get('end_date') as string, days_count: Number(fd.get('days_count')), reason: fd.get('reason') as string,
+          userName: currentUser?.name || ''
+        });
+        toast.success('Leave application submitted');
+      }
       setIsLeaveModalOpen(false);
+      setEditingLeaveLog(null);
       fetchLeaves();
+      fetchBalances(); 
+      fetchLogs();
     } catch { toast.error('Failed to submit application'); }
   };
   
@@ -542,8 +559,17 @@ export default function AttendancePage() {
     try {
       await updateLeave({ id, status, approved_by: currentUser?.name || '', userName: currentUser?.name || '' });
       toast.success(`Leave ${status}`);
-      fetchLeaves(); fetchLogs(); // Refresh logs to see "Leave" shift entries
+      fetchLeaves(); fetchLogs(); fetchBalances();
     } catch { toast.error('Failed to update leave request'); }
+  };
+
+  const handleLeaveDelete = async (id: number) => {
+    if (!window.confirm("Are you sure you want to delete this leave request? This will revert any balance deductions.")) return;
+    try {
+      await fetch(`/api/leaves?id=${id}&userName=${encodeURIComponent(currentUser?.name || '')}`, { method: 'DELETE' });
+      toast.success('Leave Request deleted');
+      fetchLeaves(); fetchLogs(); fetchBalances();
+    } catch { toast.error('Failed to delete leave'); }
   };
 
   const handleUpdateBalance = async (e: React.FormEvent) => {
@@ -589,7 +615,7 @@ export default function AttendancePage() {
                <button onClick={() => exportLeaves('pdf')} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border border-red-600/20 text-red-600 hover:bg-red-600/10 transition-colors"><Download className="w-3.5 h-3.5"/> PDF</button>
             </div>
           </div>
-          <button onClick={() => setIsLeaveModalOpen(true)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-medium rounded-lg shadow-sm">
+          <button onClick={() => { setEditingLeaveLog(null); setIsLeaveModalOpen(true); }} className="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-medium rounded-lg shadow-sm">
             Apply for Leave
           </button>
         </div>
@@ -654,13 +680,21 @@ export default function AttendancePage() {
                         {l.status !== 'Pending' && <div className="text-[9px] text-muted-foreground mt-1">By: {l.approved_by}</div>}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {l.status === 'Pending' && isManager && (
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => handleApproveReject(l.id, 'Approved')} className="p-1 hover:bg-success/20 text-success rounded transition-colors" title="Approve"><CheckCircle2 className="w-4 h-4" /></button>
-                            <button onClick={() => handleApproveReject(l.id, 'Rejected')} className="p-1 hover:bg-destructive/20 text-destructive rounded transition-colors" title="Reject"><XCircle className="w-4 h-4" /></button>
-                          </div>
-                        )}
-                        {l.status === 'Pending' && !isManager && <span className="text-[10px] text-muted-foreground italic">Pending Approval</span>}
+                        <div className="flex justify-end gap-2 items-center">
+                          {l.status === 'Pending' && isManager && (
+                            <>
+                              <button onClick={() => handleApproveReject(l.id, 'Approved')} className="p-1 hover:bg-success/20 text-success rounded transition-colors" title="Approve"><CheckCircle2 className="w-4 h-4" /></button>
+                              <button onClick={() => handleApproveReject(l.id, 'Rejected')} className="p-1 hover:bg-destructive/20 text-destructive rounded transition-colors" title="Reject"><XCircle className="w-4 h-4" /></button>
+                            </>
+                          )}
+                          {(isManager || l.member_name === currentUser?.name) && (
+                            <button onClick={() => { setEditingLeaveLog(l); setIsLeaveModalOpen(true); }} className="p-1 hover:bg-primary/20 text-primary rounded transition-colors" title="Edit Leave"><Edit className="w-3.5 h-3.5" /></button>
+                          )}
+                          {isManager && (
+                            <button onClick={() => handleLeaveDelete(l.id)} className="p-1 hover:bg-destructive/20 text-destructive rounded transition-colors" title="Delete Leave"><Trash2 className="w-3.5 h-3.5" /></button>
+                          )}
+                          {l.status === 'Pending' && !isManager && <span className="text-[10px] text-muted-foreground italic ml-2">Wait</span>}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -727,47 +761,50 @@ export default function AttendancePage() {
       </div>
       
       {/* Absolute Root Modals (Independent of Tabs) */}
-      <Modal isOpen={isLeaveModalOpen} onClose={() => setIsLeaveModalOpen(false)} title="Apply for Leave">
+      <Modal isOpen={isLeaveModalOpen} onClose={() => { setIsLeaveModalOpen(false); setEditingLeaveLog(null); }} title={editingLeaveLog ? "Edit Leave Request" : "Apply for Leave"}>
         <form onSubmit={handleLeaveSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Employee Name *</label>
-            <select name="member_name" required defaultValue={currentUser?.name} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
+            <select name="member_name" required defaultValue={editingLeaveLog?.member_name || currentUser?.name} disabled={!!editingLeaveLog} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none disabled:opacity-50 disabled:cursor-not-allowed">
               {isManager ? members.filter(m => m.status === 'Active').map(m => <option key={m.id} value={m.name}>{m.name}</option>) : <option value={currentUser?.name}>{currentUser?.name}</option>}
             </select>
+            {!!editingLeaveLog && <input type="hidden" name="member_name" value={editingLeaveLog.member_name} />}
           </div>
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Leave Type *</label>
-            <select name="leave_type" required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
+            <select name="leave_type" required defaultValue={editingLeaveLog?.leave_type || 'Annual Leave'} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
               {LEAVE_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Start Date *</label>
-              <input name="start_date" type="date" required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+              <input name="start_date" type="date" required defaultValue={editingLeaveLog?.start_date || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">End Date *</label>
-              <input name="end_date" type="date" required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+              <input name="end_date" type="date" required defaultValue={editingLeaveLog?.end_date || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Duration (Days) *</label>
-              <input name="days_count" type="number" step="0.5" required min="0.5" className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+              <input name="days_count" type="number" step="0.5" required min="0.5" defaultValue={editingLeaveLog?.days_count || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Application Date (Auto)</label>
-              <input type="text" disabled defaultValue={new Date().toISOString().split('T')[0]} className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-muted-foreground outline-none cursor-not-allowed" />
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Application Date</label>
+              <input type="text" disabled defaultValue={editingLeaveLog?.application_date || new Date().toISOString().split('T')[0]} className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-muted-foreground outline-none cursor-not-allowed" />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-1.5">Reason *</label>
-            <textarea name="reason" rows={2} required className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" placeholder="Provide details for this leave..."></textarea>
+            <textarea name="reason" rows={2} required defaultValue={editingLeaveLog?.reason || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" placeholder="Provide details for this leave..."></textarea>
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
-            <button type="button" onClick={() => setIsLeaveModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Submit Request</button>
+            <button type="button" onClick={() => { setIsLeaveModalOpen(false); setEditingLeaveLog(null); }} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
+            <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">
+              {editingLeaveLog ? "Update Request" : "Submit Request"}
+            </button>
           </div>
         </form>
       </Modal>
