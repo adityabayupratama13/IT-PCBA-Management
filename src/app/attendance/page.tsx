@@ -52,6 +52,8 @@ export default function AttendancePage() {
   const [editingBalanceMember, setEditingBalanceMember] = useState('');
   const [editingLeaveLog, setEditingLeaveLog] = useState<LeaveReq | null>(null);
   const [viewingLeave, setViewingLeave] = useState<LeaveReq | null>(null);
+  const [deleteLeaveId, setDeleteLeaveId] = useState<number | null>(null);
+  const [deleteOtLog, setDeleteOtLog] = useState<AttendanceLog | null>(null);
   
   const handleShiftChange = async (memberName: string, date: string, newShift: string) => {
     if (newShift === 'Leave') {
@@ -304,12 +306,13 @@ export default function AttendancePage() {
     } catch { toast.error('Failed to record overtime'); }
   };
   
-  const handleRemoveOT = async (log: AttendanceLog) => {
-    if(!confirm('Remove this overtime record?')) return;
+  const confirmRemoveOT = async () => {
+    if (!deleteOtLog) return;
     try {
-      await createLog({ member_name: log.member_name, date: log.date, shift: log.shift, overtime_hours: 0, overtime_desc: '', userName: currentUser?.name || '' } as unknown as AttendanceLog);
+      await createLog({ member_name: deleteOtLog.member_name, date: deleteOtLog.date, shift: deleteOtLog.shift, overtime_hours: 0, overtime_desc: '', userName: currentUser?.name || '' } as unknown as AttendanceLog);
       fetchLogs(); toast.success('Overtime removed');
     } catch { toast.error('Error removing OT'); }
+    setDeleteOtLog(null);
   };
 
   const OtTab = () => {
@@ -488,7 +491,7 @@ export default function AttendancePage() {
                                   <td className="px-5 py-4 text-right">
                                      <div className="flex justify-end items-center gap-3">
                                        <button onClick={() => { setEditingOtLog(l); setIsOtModalOpen(true); }} className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">Edit</button>
-                                       <button onClick={() => handleRemoveOT(l)} className="text-xs font-medium text-destructive hover:text-destructive/80 transition-colors">Remove</button>
+                                       <button onClick={() => setDeleteOtLog(l)} className="text-xs font-medium text-destructive hover:text-destructive/80 transition-colors">Remove</button>
                                      </div>
                                   </td>
                                 )}
@@ -563,13 +566,14 @@ export default function AttendancePage() {
     } catch { toast.error('Failed to update leave request'); }
   };
 
-  const handleLeaveDelete = async (id: number) => {
-    if (!window.confirm("Are you sure you want to delete this leave request? This will revert any balance deductions.")) return;
+  const confirmLeaveDelete = async () => {
+    if (!deleteLeaveId) return;
     try {
-      await fetch(`/api/leaves?id=${id}&userName=${encodeURIComponent(currentUser?.name || '')}`, { method: 'DELETE' });
+      await fetch(`/api/leaves?id=${deleteLeaveId}&userName=${encodeURIComponent(currentUser?.name || '')}`, { method: 'DELETE' });
       toast.success('Leave Request deleted');
       fetchLeaves(); fetchLogs(); fetchBalances();
     } catch { toast.error('Failed to delete leave'); }
+    setDeleteLeaveId(null);
   };
 
   const handleUpdateBalance = async (e: React.FormEvent) => {
@@ -691,7 +695,7 @@ export default function AttendancePage() {
                             <button onClick={() => { setEditingLeaveLog(l); setIsLeaveModalOpen(true); }} className="p-1 hover:bg-primary/20 text-primary rounded transition-colors" title="Edit Leave"><Edit className="w-3.5 h-3.5" /></button>
                           )}
                           {isManager && (
-                            <button onClick={() => handleLeaveDelete(l.id)} className="p-1 hover:bg-destructive/20 text-destructive rounded transition-colors" title="Delete Leave"><Trash2 className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => setDeleteLeaveId(l.id)} className="p-1 hover:bg-destructive/20 text-destructive rounded transition-colors" title="Delete Leave"><Trash2 className="w-3.5 h-3.5" /></button>
                           )}
                           {l.status === 'Pending' && !isManager && <span className="text-[10px] text-muted-foreground italic ml-2">Wait</span>}
                         </div>
@@ -881,6 +885,30 @@ export default function AttendancePage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal isOpen={!!deleteLeaveId} onClose={() => setDeleteLeaveId(null)} title="Confirm Deletion">
+        <div className="space-y-4">
+          <div className="text-sm text-foreground my-2">
+            Are you sure you want to delete this leave request? This action will auto-revert any balance deductions and roster assignments back to normal.
+          </div>
+          <div className="flex justify-end gap-3 pt-5 border-t border-border">
+            <button onClick={() => setDeleteLeaveId(null)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface transition-colors">Cancel</button>
+            <button onClick={confirmLeaveDelete} className="px-4 py-2 bg-destructive hover:bg-destructive/90 text-white rounded-lg text-sm font-medium shadow-sm transition-colors">Delete Request</button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={!!deleteOtLog} onClose={() => setDeleteOtLog(null)} title="Remove Overtime">
+        <div className="space-y-4">
+          <div className="text-sm text-foreground my-2">
+            Are you sure you want to remove the overtime record for <strong className="text-primary">{deleteOtLog?.member_name}</strong> on <span className="font-semibold">{deleteOtLog?.date ? format(new Date(deleteOtLog.date), 'dd MMM yyyy') : ''}</span>?
+          </div>
+          <div className="flex justify-end gap-3 pt-5 border-t border-border">
+            <button onClick={() => setDeleteOtLog(null)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface transition-colors">Cancel</button>
+            <button onClick={confirmRemoveOT} className="px-4 py-2 bg-destructive hover:bg-destructive/90 text-white rounded-lg text-sm font-medium shadow-sm transition-colors">Remove Record</button>
+          </div>
+        </div>
       </Modal>
 
     </div>
