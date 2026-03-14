@@ -3,19 +3,11 @@ export interface GanttRowProps {
   pic: string;
   startDate: Date;
   endDate: Date;
-  minDate: Date;
-  maxDate: Date;
   progress: number;
   status: 'Planning' | 'Active' | 'On Hold' | 'Completed';
 }
 
-export function GanttRow({ name, pic, startDate, endDate, minDate, maxDate, progress, status }: GanttRowProps) {
-  const totalDuration = maxDate.getTime() - minDate.getTime();
-  const startOffset = Math.max(0, startDate.getTime() - minDate.getTime());
-  const taskDuration = Math.min(endDate.getTime() - startDate.getTime(), totalDuration - startOffset);
-  
-  const leftPercent = (startOffset / totalDuration) * 100;
-  const widthPercent = (taskDuration / totalDuration) * 100;
+export function GanttRow({ name, pic, startDate, endDate, progress, status }: GanttRowProps) {
   
   const FILL_COLORS = {
     'Planning':  '#7C3AED',
@@ -23,16 +15,8 @@ export function GanttRow({ name, pic, startDate, endDate, minDate, maxDate, prog
     'On Hold':   '#EF4444',
     'Completed': '#10B981',
   };
-  
-  const TRACK_COLORS = {
-    'Planning':  'rgba(124,58,237,0.15)',
-    'Active':    'rgba(37,99,235,0.15)',
-    'On Hold':   'rgba(239,68,68,0.15)',
-    'Completed': 'rgba(16,185,129,0.15)',
-  };
 
   const fill = FILL_COLORS[status] || '#2563EB';
-  const track = TRACK_COLORS[status] || 'rgba(37,99,235,0.15)';
 
   return (
     <div className="flex items-center py-3.5 border-b border-border/40 last:border-0 transition-colors group px-2 rounded-lg"
@@ -43,30 +27,20 @@ export function GanttRow({ name, pic, startDate, endDate, minDate, maxDate, prog
         <span className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">{name}</span>
         <span className="text-xs text-muted-foreground truncate mt-0.5">PIC: {pic}</span>
       </div>
-      <div className="w-3/4 flex items-center pr-4">
-        <div className="relative h-5 w-full rounded-full overflow-hidden border border-border/50"
-          style={{ background: 'var(--background)' }}
-        >
-          {/* Track background */}
-          <div
-            className="absolute top-0 bottom-0 rounded-full"
-            style={{ left: `${leftPercent}%`, width: `${widthPercent}%`, background: track }}
-          />
-          {/* Progress fill */}
-          <div
-            className="absolute top-0 bottom-0 rounded-full transition-all"
-            style={{ left: `${leftPercent}%`, width: `${widthPercent * progress / 100}%`, background: fill }}
-          />
-          {/* Completion marker */}
-          {progress === 100 && (
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white shadow-md"
-              style={{ left: `calc(${leftPercent + widthPercent}% - 8px)` }}
-            />
-          )}
+      <div className="w-3/4 flex flex-col justify-center pr-2">
+        <div className="flex justify-between text-[10.5px] text-muted-foreground mb-1 font-medium px-1 uppercase tracking-wider">
+          <span>{startDate.toISOString().split('T')[0]}</span>
+          <span className="text-foreground/50">{status}</span>
+          <span>{endDate.toISOString().split('T')[0]}</span>
         </div>
-        <div className="w-10 ml-3 text-right flex-shrink-0">
-          <span className="text-xs font-bold text-muted-foreground group-hover:text-foreground transition-colors">{progress}%</span>
+        <div className="flex items-center gap-3 w-full">
+          <div className="relative h-2 w-full rounded-full overflow-hidden bg-muted/60 border border-border/40">
+            <div
+              className="absolute top-0 bottom-0 left-0 rounded-full transition-all"
+              style={{ width: `${progress}%`, background: fill }}
+            />
+          </div>
+          <span className="text-xs font-bold text-muted-foreground group-hover:text-foreground transition-colors w-10 text-right flex-shrink-0">{progress}%</span>
         </div>
       </div>
     </div>

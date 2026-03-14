@@ -86,10 +86,7 @@ export default function ProjectsPage() {
     return Math.round((done / linked.length) * 100);
   };
 
-  const minDateStr = projects.length > 0 ? projects.reduce((min, p) => p.startDate < min ? p.startDate : min, projects[0].startDate) : '';
-  const maxDateStr = projects.length > 0 ? projects.reduce((max, p) => p.endDate > max ? p.endDate : max, projects[0].endDate) : '';
-  const minDate = new Date(minDateStr || '2026-01-01');
-  const maxDate = new Date(maxDateStr || '2026-12-31');
+  // Removed Gantt extremes
 
   const openAddModal = () => {
     setEditingProject(null); setProgressValue(0);
@@ -205,10 +202,8 @@ export default function ProjectsPage() {
           <div className="min-w-[800px]">
             <div className="flex border-b border-border/50 pb-2 mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
               <div className="w-1/4 pl-4">Project Details</div>
-              <div className="w-3/4 flex justify-between pr-16 relative">
-                <span>{minDateStr}</span>
-                <span className="absolute left-1/2 -translate-x-1/2 opacity-50">Timeline</span>
-                <span>{maxDateStr}</span>
+              <div className="w-3/4 flex justify-between pr-4 relative">
+                <span className="opacity-80">Progress Status</span>
               </div>
             </div>
             <div className="space-y-1">
@@ -219,7 +214,7 @@ export default function ProjectsPage() {
                 return (
                   <div key={project.id}>
                     <div className="group relative cursor-pointer" onClick={() => setExpandedProject(isExpanded ? null : project.id)}>
-                      <GanttRow name={project.name} pic={project.pic} startDate={new Date(project.startDate)} endDate={new Date(project.endDate)} minDate={minDate} maxDate={maxDate} progress={autoProgress} status={project.status} />
+                      <GanttRow name={project.name} pic={project.pic} startDate={new Date(project.startDate)} endDate={new Date(project.endDate)} progress={autoProgress} status={project.status} />
                       {hasLinks && (
                         <div className="absolute left-[22%] top-1/2 -translate-y-1/2 flex items-center gap-1">
                           <Link2 className="w-3 h-3 text-primary" />

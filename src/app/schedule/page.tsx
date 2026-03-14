@@ -39,7 +39,7 @@ export default function SchedulePage() {
   const { data: rawSchedules, create, update: apiUpdate, remove } = useApi<DbSchedule>('schedules');
   const schedules = rawSchedules.map(mapFromDb);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<ScheduleItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ScheduleItem | null>(null);

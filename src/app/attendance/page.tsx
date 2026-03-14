@@ -825,8 +825,8 @@ export default function AttendancePage() {
               <input name="days_count" type="number" step="0.5" required min="0.5" defaultValue={editingLeaveLog?.days_count || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Application Date</label>
-              <input type="text" disabled defaultValue={editingLeaveLog?.application_date || new Date().toISOString().split('T')[0]} className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-muted-foreground outline-none cursor-not-allowed" />
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Application Date *</label>
+              <input name="application_date" type="date" required defaultValue={editingLeaveLog?.application_date || new Date().toISOString().split('T')[0]} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
           </div>
           <div>
