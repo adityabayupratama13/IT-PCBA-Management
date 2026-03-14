@@ -18,7 +18,25 @@ interface LeaveBalance { id: string | number; member_name: string; balance: numb
 
 const SHIFT_OPTIONS = ['Normal Shift', 'Shift 1', 'Shift 2', 'Shift 3', 'Off', 'Leave'];
 const LEAVE_TYPES = ['Annual Leave', 'Compassionate Leave', 'Maternity Leave', 'Paternity Leave', 'Marriage Leave', 'No Pay Leave'];
-const ID_HOLIDAYS = ['2026-01-01', '2026-02-18', '2026-03-20', '2026-03-21', '2026-04-03', '2026-05-01', '2026-05-14', '2026-06-01', '2026-08-17', '2026-12-25'];
+const ID_HOLIDAYS: Record<string, string> = {
+  '2026-01-01': "New Year's Day",
+  '2026-01-16': "Isra Mi'raj",
+  '2026-02-17': "Chinese New Year",
+  '2026-03-19': "Nyepi (Balinese Day of Silence)",
+  '2026-03-21': "Idul Fitri Day 1",
+  '2026-03-22': "Idul Fitri Day 2",
+  '2026-04-03': "Good Friday",
+  '2026-04-05': "Easter Sunday",
+  '2026-05-01': "Labour Day",
+  '2026-05-14': "Ascension of Jesus Christ",
+  '2026-05-27': "Eid al-Adha",
+  '2026-05-31': "Vesak Day",
+  '2026-06-01': "Pancasila Day",
+  '2026-06-16': "Islamic New Year",
+  '2026-08-17': "Independence Day",
+  '2026-08-25': "Prophet Muhammad's Birthday",
+  '2026-12-25': "Christmas Day"
+};
 
 export default function AttendancePage() {
   const { currentUser, members } = useAuth();
@@ -85,7 +103,7 @@ export default function AttendancePage() {
     try {
       for (let i = 1; i < 7; i++) {
         const dateStr = format(rosterDates[i], 'yyyy-MM-dd');
-        const shiftToAssign = ID_HOLIDAYS.includes(dateStr) ? 'Off' : mondayShift;
+        const shiftToAssign = ID_HOLIDAYS[dateStr] ? 'Off' : mondayShift;
         await createLog({ member_name: memberName, date: dateStr, shift: shiftToAssign, userName: currentUser?.name || '' } as unknown as AttendanceLog);
       }
       toast.success(`Copied Monday's shift for ${memberName}`);
@@ -114,7 +132,7 @@ export default function AttendancePage() {
           
           for (let i = 0; i < 7; i++) {
             const dateStr = format(addDays(nextWeekMonday, i), 'yyyy-MM-dd');
-            const shiftToAssign = ID_HOLIDAYS.includes(dateStr) ? 'Off' : nextShift;
+            const shiftToAssign = ID_HOLIDAYS[dateStr] ? 'Off' : nextShift;
             await createLog({ member_name: m.name, date: dateStr, shift: shiftToAssign, userName: currentUser?.name || '' } as unknown as AttendanceLog);
           }
           count++;
@@ -122,7 +140,7 @@ export default function AttendancePage() {
           // Default to Normal Shift for non-analysts
           for (let i = 0; i < 7; i++) {
             const dateStr = format(addDays(nextWeekMonday, i), 'yyyy-MM-dd');
-            const shiftToAssign = ID_HOLIDAYS.includes(dateStr) ? 'Off' : 'Normal Shift';
+            const shiftToAssign = ID_HOLIDAYS[dateStr] ? 'Off' : 'Normal Shift';
             await createLog({ member_name: m.name, date: dateStr, shift: shiftToAssign, userName: currentUser?.name || '' } as unknown as AttendanceLog);
           }
           count++;
@@ -188,12 +206,23 @@ export default function AttendancePage() {
           <thead className="bg-muted text-muted-foreground text-xs uppercase">
             <tr>
               <th className="px-4 py-3 border-r border-border min-w-[150px]">Team Member</th>
-              {rosterDates.map(d => (
-                <th key={d.toISOString()} className="px-3 py-3 text-center min-w-[110px]">
-                  <div className="font-bold">{format(d, 'EEE')}</div>
-                  <div className="text-[10px] opacity-70">{format(d, 'MMM d')}</div>
-                </th>
-              ))}
+              {rosterDates.map(d => {
+                const isHoliday = !!ID_HOLIDAYS[format(d, 'yyyy-MM-dd')];
+                return (
+                  <th key={d.toISOString()} className="px-3 py-3 text-center min-w-[110px] relative">
+                    <div className={`font-bold ${isHoliday ? 'text-destructive' : ''}`}>{format(d, 'EEE')}</div>
+                    <div className="text-[10px] opacity-70 mb-1">{format(d, 'MMM d')}</div>
+                    {isHoliday && (
+                      <div className="absolute top-1 right-2 group cursor-help">
+                        <div className="w-2 h-2 rounded-full bg-destructive/80 mr-1.5 mt-1"></div>
+                        <div className="hidden group-hover:block absolute bottom-full mb-1 right-0 min-w-max bg-foreground text-background text-[10px] px-2 py-1 rounded shadow-lg z-10 whitespace-nowrap">
+                          {ID_HOLIDAYS[format(d, 'yyyy-MM-dd')]}
+                        </div>
+                      </div>
+                    )}
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-border bg-surface">
