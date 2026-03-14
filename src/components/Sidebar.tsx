@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { GikenLogo } from '@/components/GikenLogo';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -37,12 +38,10 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
       {/* Logo */}
       <div className="px-6 py-5 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-glow-sm">
-            <span className="text-white font-bold text-sm">IT</span>
-          </div>
-          <div>
-            <div className="font-bold text-foreground text-sm xl:text-base leading-none">IT Management Apps</div>
-            <div className="text-[10px] text-muted-foreground mt-0.5 leading-none">Dashboard</div>
+          <GikenLogo className="h-6 w-auto text-[#1e3a8a] dark:text-white transition-colors duration-300" />
+          <div className="border-l border-border pl-3">
+            <div className="font-bold text-foreground text-sm xl:text-base leading-none">IT Apps</div>
+            <div className="text-[10px] text-muted-foreground mt-1 font-semibold tracking-wider uppercase">Dashboard</div>
           </div>
         </div>
         <button

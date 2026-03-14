@@ -372,6 +372,7 @@ export default function AttendancePage() {
       if (stats.length > 0 && (!selectedOtMember || !stats.find(s => s.member.name === selectedOtMember))) {
         setSelectedOtMember(stats[0].member.name);
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stats, selectedOtMember]);
 
     const exportOt = (type: 'excel' | 'pdf') => {
