@@ -1,6 +1,6 @@
 export function GikenLogo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 180 50" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <svg viewBox="0 0 210 50" xmlns="http://www.w3.org/2000/svg" className={className}>
       <g transform="skewX(-15)">
         {/* G */}
         <text x="25" y="42" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="48" fill="currentColor">G</text>
