@@ -9,7 +9,7 @@ function taskToTicketStatus(taskStatus: string): string {
 
 export async function GET() {
   const db = getDb();
-  const tasks = db.prepare('SELECT * FROM tasks ORDER BY id').all();
+  const tasks = db.prepare('SELECT * FROM tasks ORDER BY COALESCE(updated_at, id) DESC').all();
   return NextResponse.json(tasks);
 }
 
@@ -38,7 +38,7 @@ export async function PUT(req: NextRequest) {
   const ticketId = body.ticketId || body.ticket_id || existingTask?.ticket_id || '';
 
   db.prepare(
-    'UPDATE tasks SET title=?, status=?, priority=?, assignee=?, initials=?, due_date=?, ticket_id=?, resolution=?, attachments=? WHERE id=?'
+    "UPDATE tasks SET title=?, status=?, priority=?, assignee=?, initials=?, due_date=?, ticket_id=?, resolution=?, attachments=?, updated_at=datetime('now', 'localtime') WHERE id=?"
   ).run(body.title, body.status, body.priority, body.assignee, body.initials || '', body.dueDate || '', ticketId, body.resolution || '', body.attachments || '[]', body.id);
 
   // Sync: if this task is linked to a ticket, update ticket status too

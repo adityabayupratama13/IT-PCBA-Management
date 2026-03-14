@@ -245,7 +245,7 @@ export default function TasksPage() {
             <KanbanColumn key={col} title={col} count={colTasks.length}
               onAdd={() => openAddModal(col)}
               onDrop={async (taskId: number) => handleStatusChange(taskId, col)}>
-              <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
+              <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-1 space-y-3 pb-2">
                 {colTasks.map(task => {
                   let isStale = false;
                   if (task.status !== 'Done' && task.due_date) {

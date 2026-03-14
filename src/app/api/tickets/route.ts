@@ -11,7 +11,7 @@ function ticketToTaskStatus(ticketStatus: string): string {
 
 export async function GET() {
   const db = getDb();
-  const tickets = db.prepare('SELECT * FROM tickets ORDER BY created_date DESC').all();
+  const tickets = db.prepare('SELECT * FROM tickets ORDER BY COALESCE(updated_at, created_date, id) DESC').all();
   return NextResponse.json(tickets);
 }
 
@@ -53,7 +53,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json();
   const db = getDb();
 
-  db.prepare('UPDATE tickets SET title=?, reporter=?, priority=?, status=?, resolution=?, attachments=? WHERE id=?')
+  db.prepare("UPDATE tickets SET title=?, reporter=?, priority=?, status=?, resolution=?, attachments=?, updated_at=datetime('now', 'localtime') WHERE id=?")
     .run(body.title, body.reporter, body.priority, body.status, body.resolution || '', body.attachments || '[]', body.id);
 
   // Sync: update any linked task's status automatically

@@ -53,7 +53,8 @@ function initSchema(db: Database.Database) {
       status TEXT NOT NULL DEFAULT 'Open',
       created_date TEXT DEFAULT (datetime('now')),
       resolution TEXT DEFAULT '',
-      attachments TEXT DEFAULT '[]'
+      attachments TEXT DEFAULT '[]',
+      updated_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS tasks (
@@ -65,7 +66,8 @@ function initSchema(db: Database.Database) {
       due_date TEXT DEFAULT '',
       ticket_id TEXT DEFAULT '',
       resolution TEXT DEFAULT '',
-      attachments TEXT DEFAULT '[]'
+      attachments TEXT DEFAULT '[]',
+      updated_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS schedules (
@@ -176,6 +178,10 @@ function initSchema(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_schedules_recurrence ON schedules(recurrence);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
     CREATE INDEX IF NOT EXISTS idx_members_badge ON members(badge);
+
+    // Auto-migrate updated_at if missing
+    try { db.exec("ALTER TABLE tasks ADD COLUMN updated_at TEXT DEFAULT (datetime('now', 'localtime'))"); } catch (e) { /* Ignore */ }
+    try { db.exec("ALTER TABLE tickets ADD COLUMN updated_at TEXT DEFAULT (datetime('now', 'localtime'))"); } catch (e) { /* Ignore */ }
     CREATE INDEX IF NOT EXISTS idx_positions_division ON positions(division);
     CREATE INDEX IF NOT EXISTS idx_positions_level ON positions(level);
     CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance_logs(date);
