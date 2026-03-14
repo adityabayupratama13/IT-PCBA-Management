@@ -9,7 +9,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <AuthProvider>
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
         {children}
-        <Toaster position="top-right" richColors />
+        <Toaster position="top-right" richColors theme="system" />
       </ThemeProvider>
     </AuthProvider>
   );

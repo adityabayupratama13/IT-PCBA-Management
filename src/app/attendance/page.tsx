@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { CalendarDays, Clock, FileText, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Search } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CalendarDays, Clock, FileText, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Search, User } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
 import { format, addDays, startOfWeek, subMonths, setDate, isWithinInterval } from 'date-fns';
@@ -38,6 +39,7 @@ export default function AttendancePage() {
   // Tab 2: Overtime State
   const [otMonthOffset, setOtMonthOffset] = useState(0); // 0 = Current Cut-off
   const [otSearch, setOtSearch] = useState('');
+  const [selectedOtMember, setSelectedOtMember] = useState<string | null>(null);
   const [isOtModalOpen, setIsOtModalOpen] = useState(false);
   const [editingOtLog, setEditingOtLog] = useState<Partial<AttendanceLog> | null>(null);
   
@@ -83,12 +85,13 @@ export default function AttendancePage() {
     try {
       const nextWeekMonday = addDays(weekStart, 7);
       for (const m of members) {
-        if (m.status !== 'Active' || !m.role.includes('Analyst & Support')) continue;
+        if (m.status !== 'Active') continue;
+        const isAnalyst = m.role.includes('Analyst & Support');
         
         const thisMondayStr = format(rosterDates[0], 'yyyy-MM-dd');
         const currentShift = logs.find(l => l.member_name === m.name && l.date === thisMondayStr)?.shift;
         
-        if (currentShift && currentShift.includes('Shift')) {
+        if (isAnalyst && currentShift && currentShift.includes('Shift')) {
           let nextShift = 'Shift 1';
           if (currentShift === 'Shift 1') nextShift = 'Shift 3';
           else if (currentShift === 'Shift 3') nextShift = 'Shift 2';
@@ -97,6 +100,13 @@ export default function AttendancePage() {
           for (let i = 0; i < 7; i++) {
             const dateStr = format(addDays(nextWeekMonday, i), 'yyyy-MM-dd');
             await createLog({ member_name: m.name, date: dateStr, shift: nextShift, userName: currentUser?.name || '' } as unknown as AttendanceLog);
+          }
+          count++;
+        } else if (!isAnalyst) {
+          // Default to Normal Shift for non-analysts
+          for (let i = 0; i < 7; i++) {
+            const dateStr = format(addDays(nextWeekMonday, i), 'yyyy-MM-dd');
+            await createLog({ member_name: m.name, date: dateStr, shift: 'Normal Shift', userName: currentUser?.name || '' } as unknown as AttendanceLog);
           }
           count++;
         }
@@ -143,7 +153,7 @@ export default function AttendancePage() {
                     <div className="font-medium text-foreground truncate">{member.name}</div>
                     <div className="flex items-center justify-between mt-1">
                       <div className="text-[10px] text-muted-foreground truncate">{member.role}</div>
-                      {isManager && opts === SHIFT_OPTIONS_STAFF && (
+                      {isManager && (
                         <button onClick={() => handleCopyMonday(member.name)} className="text-[10px] font-semibold text-primary/80 hover:text-primary transition-colors flex-shrink-0" title="Copy Monday shift to entire week">Copy Wk</button>
                       )}
                     </div>
@@ -255,6 +265,14 @@ export default function AttendancePage() {
       return { member: m, periodOt, ytdOt, logsToEdit: memberLogs.filter(l => isWithinInterval(new Date(l.date), { start: startOfCutoff, end: endOfCutoff })) };
     });
 
+    useEffect(() => {
+      if (stats.length > 0 && (!selectedOtMember || !stats.find(s => s.member.name === selectedOtMember))) {
+        setSelectedOtMember(stats[0].member.name);
+      }
+    }, [stats, selectedOtMember]);
+
+    const currentMemberStat = stats.find(s => s.member.name === selectedOtMember) || stats[0];
+
     return (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -278,78 +296,134 @@ export default function AttendancePage() {
           </div>
         </div>
         
-        <div className="bg-surface border border-border rounded-xl overflow-hidden">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-muted text-muted-foreground text-xs uppercase">
-              <tr>
-                <th className="px-4 py-3 border-b border-border">Name & Role</th>
-                <th className="px-4 py-3 border-b border-border">Date & Description</th>
-                <th className="px-4 py-3 border-b border-border text-center">Time Range</th>
-                <th className="px-4 py-3 border-b border-border text-center">Jam Mati<br/><span className="lowercase font-normal mt-0.5 text-[9px] block">Actual</span></th>
-                <th className="px-4 py-3 border-b border-border text-center">Jam Hidup<br/><span className="lowercase font-normal mt-0.5 text-[9px] block">Formulated</span></th>
-                {isManager && <th className="px-4 py-3 border-b border-border text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {stats.map(s => {
-                if (s.logsToEdit.length === 0) return null;
-                const totalMati = s.periodOt;
-                const totalHidup = s.logsToEdit.reduce((acc, l) => acc + calculateJamHidup(l.overtime_hours, s.member.role), 0);
-                return (
-                  <React.Fragment key={s.member.id}>
-                    {s.logsToEdit.map((l, idx) => {
-                      const jnHidup = calculateJamHidup(l.overtime_hours, s.member.role);
-                      return (
-                        <tr key={l.id} className="hover:bg-muted/30 transition-colors">
-                          {idx === 0 && (
-                            <td className="px-4 py-3 align-top border-r border-border bg-muted/10 w-[200px]" rowSpan={s.logsToEdit.length}>
-                              <div className="font-semibold text-foreground">{s.member.name}</div>
-                              <div className="text-[10px] text-muted-foreground">{s.member.role}</div>
-                              <div className="mt-4 pt-3 border-t border-border/50">
-                                <div className="text-[10px] uppercase font-bold text-muted-foreground mb-1 mt-1">Total (P)</div>
-                                <div className="flex gap-4">
-                                  <div>
-                                    <div className="text-sm font-bold text-foreground">{totalMati.toFixed(1)}h</div>
-                                    <div className="text-[9px] text-muted-foreground">Mati</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-sm font-bold text-primary">{totalHidup.toFixed(1)}h</div>
-                                    <div className="text-[9px] text-muted-foreground">Hidup</div>
-                                  </div>
-                                </div>
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Sidebar Member Selector */}
+          <div className="w-full lg:w-64 flex flex-col gap-2 flex-shrink-0">
+            <h4 className="text-xs font-semibold uppercase text-muted-foreground px-2 mb-1">Select Member</h4>
+            <div className="flex lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto max-h-[600px] custom-scrollbar pb-2 lg:pb-0">
+              {stats.map(s => (
+                <button
+                  key={s.member.id}
+                  onClick={() => setSelectedOtMember(s.member.name)}
+                  className={`flex flex-col items-start px-4 py-3 rounded-xl border transition-all flex-shrink-0 w-[200px] lg:w-auto
+                    ${selectedOtMember === s.member.name 
+                      ? 'bg-primary/10 border-primary text-primary shadow-sm' 
+                      : 'bg-surface border-border text-foreground hover:bg-muted/50'}`}
+                >
+                  <div className="font-semibold text-sm truncate w-full text-left">{s.member.name}</div>
+                  <div className="flex justify-between w-full mt-2 items-end">
+                    <span className="text-[10px] opacity-80">{s.member.role}</span>
+                    <span className={`text-xs font-bold ${s.periodOt > 0 ? '' : 'opacity-50'}`}>{s.periodOt.toFixed(1)}h</span>
+                  </div>
+                </button>
+              ))}
+              {stats.length === 0 && <div className="text-xs text-muted-foreground p-2">No members found.</div>}
+            </div>
+          </div>
+
+          {/* Main Content Table for Selected Member */}
+          <div className="flex-1 min-w-0">
+            <AnimatePresence mode="wait">
+              {currentMemberStat ? (
+                <motion.div
+                  key={currentMemberStat.member.id}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm"
+                >
+                  <div className="p-5 border-b border-border bg-muted/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary border border-primary/30">
+                        <User className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-bold text-foreground">{currentMemberStat.member.name}</h4>
+                        <p className="text-xs text-muted-foreground">{currentMemberStat.member.role}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-4">
+                      <div className="bg-background border border-border rounded-lg px-3 py-1.5 flex flex-col items-center min-w-[80px]">
+                        <span className="text-[10px] text-muted-foreground uppercase font-semibold">Total (P) Mati</span>
+                        <span className="text-sm font-bold text-foreground">{currentMemberStat.periodOt.toFixed(1)}h</span>
+                      </div>
+                      <div className="bg-primary/10 border border-primary/20 rounded-lg px-3 py-1.5 flex flex-col items-center min-w-[80px]">
+                        <span className="text-[10px] text-primary uppercase font-semibold">Total (P) Hidup</span>
+                        <span className="text-sm font-bold text-primary">
+                          {currentMemberStat.logsToEdit.reduce((acc, l) => acc + calculateJamHidup(l.overtime_hours, currentMemberStat.member.role), 0).toFixed(1)}h
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-muted/50 text-muted-foreground text-xs uppercase border-b border-border">
+                        <tr>
+                          <th className="px-5 py-3">Date & Description</th>
+                          <th className="px-5 py-3 text-center">Time Range</th>
+                          <th className="px-5 py-3 text-center">Jam Mati<br/><span className="lowercase font-normal mt-0.5 text-[9px] block">Actual</span></th>
+                          <th className="px-5 py-3 text-center">Jam Hidup<br/><span className="lowercase font-normal mt-0.5 text-[9px] block">Formulated</span></th>
+                          {isManager && <th className="px-5 py-3 text-right">Actions</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {currentMemberStat.logsToEdit.length > 0 ? (
+                          currentMemberStat.logsToEdit.map((l, idx) => {
+                            const jnHidup = calculateJamHidup(l.overtime_hours, currentMemberStat.member.role);
+                            return (
+                              <motion.tr 
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: idx * 0.05 }}
+                                key={l.id} 
+                                className="hover:bg-muted/30 transition-colors"
+                              >
+                                <td className="px-5 py-4 w-[300px]">
+                                  <div className="font-medium text-foreground">{format(new Date(l.date), 'EEEE, dd MMM yyyy')}</div>
+                                  <div className="text-xs text-muted-foreground mt-1 line-clamp-2" title={l.overtime_desc}>{l.overtime_desc || 'No reason specified'}</div>
+                                </td>
+                                <td className="px-5 py-4 text-center">
+                                  <span className="bg-background border border-border px-2.5 py-1 rounded text-xs font-mono font-medium shadow-sm">
+                                    {l.ot_start_time || '--:--'} - {l.ot_end_time || '--:--'}
+                                  </span>
+                                </td>
+                                <td className="px-5 py-4 text-center text-foreground font-semibold">{Number(l.overtime_hours).toFixed(1)}h</td>
+                                <td className="px-5 py-4 text-center font-bold text-primary">{jnHidup.toFixed(1)}h</td>
+                                {isManager && (
+                                  <td className="px-5 py-4 text-right">
+                                     <div className="flex justify-end items-center gap-3">
+                                       <button onClick={() => { setEditingOtLog(l); setIsOtModalOpen(true); }} className="text-xs font-medium text-primary hover:text-primary/80 transition-colors">Edit</button>
+                                       <button onClick={() => handleRemoveOT(l)} className="text-xs font-medium text-destructive hover:text-destructive/80 transition-colors">Remove</button>
+                                     </div>
+                                  </td>
+                                )}
+                              </motion.tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="text-center py-12 text-muted-foreground bg-muted/10">
+                              <div className="flex flex-col items-center justify-center">
+                                <Clock className="w-8 h-8 opacity-20 mb-3" />
+                                <span>No overtime records found in this period.</span>
                               </div>
                             </td>
-                          )}
-                          <td className="px-4 py-3 w-[250px]">
-                            <div className="font-medium">{format(new Date(l.date), 'dd MMM yyyy')}</div>
-                            <div className="text-xs text-muted-foreground truncate" title={l.overtime_desc}>{l.overtime_desc || 'No reason specified'}</div>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="bg-background border border-border px-2 py-1 rounded text-xs font-mono">
-                              {l.ot_start_time || '--:--'} - {l.ot_end_time || '--:--'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center font-bold text-foreground/80">{Number(l.overtime_hours).toFixed(1)}h</td>
-                          <td className="px-4 py-3 text-center font-bold text-primary">{jnHidup.toFixed(1)}h</td>
-                          {isManager && (
-                            <td className="px-4 py-3 text-right space-x-2">
-                               <button onClick={() => { setEditingOtLog(l); setIsOtModalOpen(true); }} className="text-[10px] font-medium text-primary hover:underline">Edit</button>
-                               <button onClick={() => handleRemoveOT(l)} className="text-[10px] font-medium text-destructive hover:underline">Remove</button>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </React.Fragment>
-                );
-              })}
-              {stats.every(s => s.logsToEdit.length === 0) && (
-                <tr>
-                  <td colSpan={6} className="text-center py-10 text-muted-foreground italic">No overtime records found in this period.</td>
-                </tr>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="bg-surface border border-border rounded-xl p-10 flex flex-col items-center justify-center text-muted-foreground h-full min-h-[400px]">
+                  <User className="w-12 h-12 opacity-20 mb-4" />
+                  <p>Select a member from the sidebar to view their overtime details.</p>
+                </div>
               )}
-            </tbody>
-          </table>
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     );
@@ -529,10 +603,21 @@ export default function AttendancePage() {
         </div>
         
         {/* Content Area */}
-        <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
-          {activeTab === 'roster' && <RosterTab />}
-          {activeTab === 'overtime' && <OtTab />}
-          {activeTab === 'leave' && <LeaveTab />}
+        <div className="p-6 flex-1 overflow-y-auto custom-scrollbar relative">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.2 }}
+              className="h-full"
+            >
+              {activeTab === 'roster' && <RosterTab />}
+              {activeTab === 'overtime' && <OtTab />}
+              {activeTab === 'leave' && <LeaveTab />}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
       
