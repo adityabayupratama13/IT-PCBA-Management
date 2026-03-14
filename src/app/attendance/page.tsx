@@ -15,6 +15,7 @@ interface LeaveBalance { id: string | number; member_name: string; balance: numb
 
 const SHIFT_OPTIONS = ['Normal Shift', 'Shift 1', 'Shift 2', 'Shift 3', 'Off', 'Leave'];
 const LEAVE_TYPES = ['Annual Leave', 'Compassionate Leave', 'Maternity Leave', 'Paternity Leave', 'Marriage Leave', 'No Pay Leave'];
+const ID_HOLIDAYS = ['2026-01-01', '2026-02-18', '2026-03-20', '2026-03-21', '2026-04-03', '2026-05-01', '2026-05-14', '2026-06-01', '2026-08-17', '2026-12-25'];
 
 export default function AttendancePage() {
   const { currentUser, members } = useAuth();
@@ -46,8 +47,16 @@ export default function AttendancePage() {
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
   const [editingBalanceMember, setEditingBalanceMember] = useState('');
+  const [viewingLeave, setViewingLeave] = useState<LeaveReq | null>(null);
   
   const handleShiftChange = async (memberName: string, date: string, newShift: string) => {
+    if (newShift === 'Leave') {
+      const existing = leaves.find(l => l.member_name === memberName && l.status === 'Approved' && date >= l.start_date && date <= l.end_date);
+      if (!existing) {
+        toast.error('Apply cuti melalui tab "Leave Management" terlebih dahulu. Sistem akan otomatis mengisi roster saat di-Approve.');
+        return;
+      }
+    }
     setSavingShift(true);
     try {
       await createLog({ member_name: memberName, date, shift: newShift, userName: currentUser?.name || '' } as unknown as AttendanceLog);
@@ -70,7 +79,8 @@ export default function AttendancePage() {
     try {
       for (let i = 1; i < 7; i++) {
         const dateStr = format(rosterDates[i], 'yyyy-MM-dd');
-        await createLog({ member_name: memberName, date: dateStr, shift: mondayShift, userName: currentUser?.name || '' } as unknown as AttendanceLog);
+        const shiftToAssign = ID_HOLIDAYS.includes(dateStr) ? 'Off' : mondayShift;
+        await createLog({ member_name: memberName, date: dateStr, shift: shiftToAssign, userName: currentUser?.name || '' } as unknown as AttendanceLog);
       }
       toast.success(`Copied Monday's shift for ${memberName}`);
       fetchLogs();
@@ -98,14 +108,16 @@ export default function AttendancePage() {
           
           for (let i = 0; i < 7; i++) {
             const dateStr = format(addDays(nextWeekMonday, i), 'yyyy-MM-dd');
-            await createLog({ member_name: m.name, date: dateStr, shift: nextShift, userName: currentUser?.name || '' } as unknown as AttendanceLog);
+            const shiftToAssign = ID_HOLIDAYS.includes(dateStr) ? 'Off' : nextShift;
+            await createLog({ member_name: m.name, date: dateStr, shift: shiftToAssign, userName: currentUser?.name || '' } as unknown as AttendanceLog);
           }
           count++;
         } else if (!isAnalyst) {
           // Default to Normal Shift for non-analysts
           for (let i = 0; i < 7; i++) {
             const dateStr = format(addDays(nextWeekMonday, i), 'yyyy-MM-dd');
-            await createLog({ member_name: m.name, date: dateStr, shift: 'Normal Shift', userName: currentUser?.name || '' } as unknown as AttendanceLog);
+            const shiftToAssign = ID_HOLIDAYS.includes(dateStr) ? 'Off' : 'Normal Shift';
+            await createLog({ member_name: m.name, date: dateStr, shift: shiftToAssign, userName: currentUser?.name || '' } as unknown as AttendanceLog);
           }
           count++;
         }
@@ -177,6 +189,19 @@ export default function AttendancePage() {
                           {SHIFT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                           {currentVal === 'Leave' && !SHIFT_OPTIONS.includes('Leave') && <option value="Leave">Leave</option>}
                         </select>
+                        {currentVal === 'Leave' && (
+                          <button 
+                            onClick={() => {
+                              const match = leaves.find(l => l.member_name === member.name && l.status === 'Approved' && dateStr >= l.start_date && dateStr <= l.end_date);
+                              if(match) setViewingLeave(match);
+                              else toast.info('No corresponding approved leave form found for this date.');
+                            }}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 text-destructive hover:bg-destructive/20 p-1 rounded transition-colors"
+                            title="View Leave Details"
+                          >
+                            <FileText className="w-3 h-3" />
+                          </button>
+                        )}
                       </td>
                     );
                   })}
@@ -647,7 +672,7 @@ export default function AttendancePage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Duration (Days) *</label>
-              <input name="days_count" type="number" required min="1" className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+              <input name="days_count" type="number" step="0.5" required min="0.5" className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <div>
               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Application Date (Auto)</label>
@@ -703,7 +728,7 @@ export default function AttendancePage() {
           <p className="text-sm text-muted-foreground">Set the initial manual balance for <strong className="text-foreground">{editingBalanceMember}</strong>. The system will auto-add +1 day per month starting next month.</p>
           <div>
              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Current Balance (Days) *</label>
-             <input name="balance" type="number" required defaultValue={balances?.find(b => b.member_name === editingBalanceMember)?.balance || 0} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+             <input name="balance" type="number" step="0.5" required defaultValue={balances?.find(b => b.member_name === editingBalanceMember)?.balance || 0} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
           </div>
           <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
             <button type="button" onClick={() => setIsBalanceModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
@@ -711,6 +736,34 @@ export default function AttendancePage() {
           </div>
         </form>
       </Modal>
+      <Modal isOpen={!!viewingLeave} onClose={() => setViewingLeave(null)} title="Leave Application Details">
+        {viewingLeave && (
+          <div className="space-y-4">
+            <div className="bg-muted/30 p-4 rounded-xl border border-border">
+              <h4 className="font-semibold text-foreground">{viewingLeave.member_name}</h4>
+              <p className="text-sm text-primary font-medium mt-1">{viewingLeave.leave_type}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground text-xs uppercase font-bold">Duration</span>
+                <p className="font-medium">{viewingLeave.days_count} Days</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground text-xs uppercase font-bold">Date Range</span>
+                <p className="font-medium">{format(new Date(viewingLeave.start_date), 'dd MMM')} - {format(new Date(viewingLeave.end_date), 'dd MMM yyyy')}</p>
+              </div>
+            </div>
+            <div className="text-sm border-t border-border pt-3 mt-3">
+              <span className="text-muted-foreground text-xs uppercase font-bold">Reason</span>
+              <p className="font-medium mt-1">{viewingLeave.reason}</p>
+            </div>
+            <div className="pt-4 flex justify-end gap-3 border-t border-border mt-2">
+              <button type="button" onClick={() => setViewingLeave(null)} className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Done</button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
     </div>
   );
 }
