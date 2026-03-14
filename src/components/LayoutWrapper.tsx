@@ -1,12 +1,22 @@
 'use client';
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { PageTransition } from "@/components/PageTransition";
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+
+  if (pathname === '/login') {
+    return (
+      <main className="min-h-screen bg-background">
+        <PageTransition>{children}</PageTransition>
+      </main>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
