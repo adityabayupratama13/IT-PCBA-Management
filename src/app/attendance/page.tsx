@@ -10,11 +10,11 @@ import { Modal } from '@/components/Modal';
 // --- Types ---
 interface AttendanceLog { id: number; member_name: string; date: string; shift: string; overtime_hours: number; overtime_desc: string; [key: string]: unknown; }
 interface LeaveReq { id: number; member_name: string; leave_type: string; application_date: string; start_date: string; end_date: string; days_count: number; reason: string; status: string; approved_by: string; userName?: string; [key: string]: unknown; }
+interface LeaveBalance { id: string | number; member_name: string; balance: number; last_accrual_month: string; [key: string]: unknown; }
 
 const SHIFT_OPTIONS_STAFF = ['Shift 1', 'Shift 2', 'Shift 3', 'Off', 'Leave'];
 const SHIFT_OPTIONS_MGMT = ['Normal Shift', 'Off', 'Leave'];
 const LEAVE_TYPES = ['Annual Leave', 'Compassionate Leave', 'Maternity Leave', 'Paternity Leave', 'Marriage Leave', 'No Pay Leave'];
-const LEAVE_ALLOWANCE = 12;
 
 export default function AttendancePage() {
   const { currentUser, members } = useAuth();
@@ -23,9 +23,10 @@ export default function AttendancePage() {
   // API Data
   const { data: logs, refetch: fetchLogs, create: createLog } = useApi<AttendanceLog>('attendance');
   const { data: leaves, refetch: fetchLeaves, create: createLeave, update: updateLeave } = useApi<LeaveReq>('leaves');
+  const { data: balances, refetch: fetchBalances, update: updateBalance } = useApi<LeaveBalance>('leave-balances');
   
   // Refresh on mount
-  useEffect(() => { fetchLogs(); fetchLeaves(); }, [fetchLogs, fetchLeaves]);
+  useEffect(() => { fetchLogs(); fetchLeaves(); fetchBalances(); }, [fetchLogs, fetchLeaves, fetchBalances]);
   
   const [activeTab, setActiveTab] = useState<'roster' | 'overtime' | 'leave'>('roster');
   
@@ -37,9 +38,13 @@ export default function AttendancePage() {
   // Tab 2: Overtime State
   const [otMonthOffset, setOtMonthOffset] = useState(0); // 0 = Current Cut-off
   const [otSearch, setOtSearch] = useState('');
+  const [isOtModalOpen, setIsOtModalOpen] = useState(false);
+  const [editingOtLog, setEditingOtLog] = useState<Partial<AttendanceLog> | null>(null);
   
   // Tab 3: Leave State
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isBalanceModalOpen, setIsBalanceModalOpen] = useState(false);
+  const [editingBalanceMember, setEditingBalanceMember] = useState('');
   
   const handleShiftChange = async (memberName: string, date: string, newShift: string) => {
     setSavingShift(true);
@@ -54,11 +59,61 @@ export default function AttendancePage() {
     }
   };
 
+  const handleCopyMonday = async (memberName: string) => {
+    const mondayStr = format(rosterDates[0], 'yyyy-MM-dd');
+    const mondayShift = logs.find(l => l.member_name === memberName && l.date === mondayStr)?.shift;
+    if (!mondayShift || mondayShift === 'Off' || mondayShift === 'Leave') {
+      return toast.error('Set a valid active shift on Monday first!');
+    }
+    setSavingShift(true);
+    try {
+      for (let i = 1; i < 7; i++) {
+        const dateStr = format(rosterDates[i], 'yyyy-MM-dd');
+        await createLog({ member_name: memberName, date: dateStr, shift: mondayShift, userName: currentUser?.name || '' } as unknown as AttendanceLog);
+      }
+      toast.success(`Copied Monday's shift for ${memberName}`);
+      fetchLogs();
+    } catch { toast.error('Failed to copy shift'); }
+    finally { setSavingShift(false); }
+  };
+  
+  const handleAutoRotateNextWeek = async () => {
+    setSavingShift(true);
+    let count = 0;
+    try {
+      const nextWeekMonday = addDays(weekStart, 7);
+      for (const m of members) {
+        if (m.status !== 'Active' || ['Senior', 'Supervisor', 'Manager'].some(r => m.role.includes(r))) continue;
+        
+        const thisMondayStr = format(rosterDates[0], 'yyyy-MM-dd');
+        const currentShift = logs.find(l => l.member_name === m.name && l.date === thisMondayStr)?.shift;
+        
+        if (currentShift && currentShift.includes('Shift')) {
+          let nextShift = 'Shift 1';
+          if (currentShift === 'Shift 1') nextShift = 'Shift 2';
+          else if (currentShift === 'Shift 2') nextShift = 'Shift 3';
+          else if (currentShift === 'Shift 3') nextShift = 'Shift 1';
+          
+          for (let i = 0; i < 7; i++) {
+            const dateStr = format(addDays(nextWeekMonday, i), 'yyyy-MM-dd');
+            await createLog({ member_name: m.name, date: dateStr, shift: nextShift, userName: currentUser?.name || '' } as unknown as AttendanceLog);
+          }
+          count++;
+        }
+      }
+      toast.success(`Auto-rotated shifts for ${count} staff next week.`);
+      setWeekStart(nextWeekMonday);
+      fetchLogs();
+    } catch { toast.error('Error auto-rotating shifts'); }
+    finally { setSavingShift(false); }
+  };
+
   const RosterTab = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-foreground">Weekly Shift Roster</h3>
         <div className="flex items-center gap-2 bg-muted p-1 rounded-lg border border-border">
+          {isManager && <button onClick={handleAutoRotateNextWeek} className="px-3 py-1 bg-primary text-primary-foreground text-xs font-medium rounded shadow-sm mr-2 hover:bg-primary/90 transition-colors" title="Rotate staff shifts 1->2->3->1 for next week">Auto-Rotate (Next Wk)</button>}
           <button onClick={() => setWeekStart(addDays(weekStart, -7))} className="p-1 hover:bg-background rounded text-muted-foreground"><ChevronLeft className="w-4 h-4" /></button>
           <span className="text-sm font-medium px-2">{format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d, yyyy')}</span>
           <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="p-1 hover:bg-background rounded text-muted-foreground"><ChevronRight className="w-4 h-4" /></button>
@@ -86,7 +141,12 @@ export default function AttendancePage() {
                 <tr key={member.id} className="hover:bg-primary/5 transition-colors">
                   <td className="px-4 py-3 border-r border-border">
                     <div className="font-medium text-foreground truncate">{member.name}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">{member.role}</div>
+                    <div className="flex items-center justify-between mt-1">
+                      <div className="text-[10px] text-muted-foreground truncate">{member.role}</div>
+                      {isManager && opts === SHIFT_OPTIONS_STAFF && (
+                        <button onClick={() => handleCopyMonday(member.name)} className="text-[10px] font-semibold text-primary/80 hover:text-primary transition-colors flex-shrink-0" title="Copy Monday shift to entire week">Copy Wk</button>
+                      )}
+                    </div>
                   </td>
                   {rosterDates.map(d => {
                     const dateStr = format(d, 'yyyy-MM-dd');
@@ -122,6 +182,38 @@ export default function AttendancePage() {
   );
 
   // --- Helpers Tab 2: Overtime ---
+  const handleOTSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    try {
+      const dateStr = fd.get('date') as string;
+      const mem = fd.get('member_name') as string;
+      // Extract shift or default to Off
+      const existingShift = logs.find(l => l.member_name === mem && l.date === dateStr)?.shift || 'Off';
+      
+      await createLog({
+        member_name: mem, 
+        date: dateStr, 
+        shift: existingShift, 
+        overtime_hours: Number(fd.get('hours')), 
+        overtime_desc: fd.get('reason') as string, 
+        userName: currentUser?.name || ''
+      } as unknown as AttendanceLog);
+      
+      toast.success('Overtime recorded successfully');
+      setIsOtModalOpen(false);
+      fetchLogs();
+    } catch { toast.error('Failed to record overtime'); }
+  };
+  
+  const handleRemoveOT = async (log: AttendanceLog) => {
+    if(!confirm('Remove this overtime record?')) return;
+    try {
+      await createLog({ member_name: log.member_name, date: log.date, shift: log.shift, overtime_hours: 0, overtime_desc: '', userName: currentUser?.name || '' } as unknown as AttendanceLog);
+      fetchLogs(); toast.success('Overtime removed');
+    } catch { toast.error('Error removing OT'); }
+  };
+
   const OtTab = () => {
     // Cut-off Logic: 16th of previous month to 15th of current target month
     const targetDate = subMonths(new Date(), otMonthOffset);
@@ -151,16 +243,19 @@ export default function AttendancePage() {
             <h3 className="text-lg font-semibold text-foreground flex items-center gap-2"><Clock className="w-5 h-5 text-primary"/> Overtime Tracker</h3>
             <p className="text-xs text-muted-foreground">Cut-off period: 16th to 15th</p>
           </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-48">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-48 w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input placeholder="Search member..." value={otSearch} onChange={e => setOtSearch(e.target.value)} className="w-full bg-surface border border-border rounded-lg pl-9 pr-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
-            <select value={otMonthOffset} onChange={e => setOtMonthOffset(Number(e.target.value))} className="bg-surface border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none cursor-pointer">
+            <select value={otMonthOffset} onChange={e => setOtMonthOffset(Number(e.target.value))} className="bg-surface border border-border w-full sm:w-auto rounded-lg px-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none cursor-pointer">
               <option value="0">Current ({format(endOfCutoff, 'MMM yyyy')})</option>
               <option value="1">Last Month ({format(subMonths(endOfCutoff, 1), 'MMM yyyy')})</option>
               <option value="2">2 Months Ago ({format(subMonths(endOfCutoff, 2), 'MMM yyyy')})</option>
             </select>
+            <button onClick={() => { setEditingOtLog(null); setIsOtModalOpen(true); }} className="px-4 py-2 w-full sm:w-auto bg-primary text-primary-foreground text-sm font-medium rounded-lg shadow whitespace-nowrap hover:bg-primary/90">
+              + Add Overtime
+            </button>
           </div>
         </div>
         
@@ -181,10 +276,20 @@ export default function AttendancePage() {
               <div className="flex-1 space-y-2 mb-3 max-h-32 overflow-y-auto custom-scrollbar pr-1">
                 {s.logsToEdit.length === 0 && <p className="text-xs text-muted-foreground italic text-center py-2">No overtime in this period</p>}
                 {s.logsToEdit.map(l => (
-                  <div key={l.id} className="text-xs bg-muted/50 rounded flex justify-between p-1.5 border border-border/50">
-                    <span className="font-medium">{format(new Date(l.date), 'dd MMM')}</span>
-                    <span className="text-muted-foreground truncate max-w-[120px]" title={l.overtime_desc}>{l.overtime_desc || 'No desc'}</span>
-                    <span className="text-primary font-bold">+{l.overtime_hours}h</span>
+                  <div key={l.id} className="bg-muted/50 rounded flex justify-between items-center p-2 border border-border/50 group">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-medium text-foreground">{format(new Date(l.date), 'dd MMM yyyy')}</span>
+                      <span className="text-[10px] text-muted-foreground truncate w-[100px]" title={l.overtime_desc}>{l.overtime_desc || 'No reason'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <span className="text-primary text-sm font-bold">+{l.overtime_hours}h</span>
+                       {isManager && (
+                         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                           <button onClick={() => { setEditingOtLog(l); setIsOtModalOpen(true); }} className="text-primary hover:underline text-[10px]">Edit</button>
+                           <button onClick={() => handleRemoveOT(l)} className="text-destructive hover:bg-destructive/10 rounded-full p-0.5" title="Remove"><XCircle className="w-3 h-3"/></button>
+                         </div>
+                       )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -224,26 +329,30 @@ export default function AttendancePage() {
     } catch { toast.error('Failed to update leave request'); }
   };
 
+  const handleUpdateBalance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const fd = new FormData(e.target as HTMLFormElement);
+    try {
+      await updateBalance({
+        member_name: editingBalanceMember,
+        balance: Number(fd.get('balance')),
+        last_accrual_month: format(new Date(), 'yyyy-MM'),
+        userName: currentUser?.name || ''
+      } as unknown as LeaveBalance);
+      toast.success('Balance updated');
+      setIsBalanceModalOpen(false);
+      fetchBalances();
+    } catch { toast.error('Failed to update balance'); }
+  };
+
   const LeaveTab = () => {
-    // Generate balances dynamically
-    const balances = members.filter(m => m.status === 'Active').map(m => {
-      const approvedLeaves = leaves.filter(l => l.member_name === m.name && l.status === 'Approved' && l.leave_type === 'Annual Leave');
-      const used = approvedLeaves.reduce((sum, l) => sum + l.days_count, 0);
-      
-      // Simple accrual: 1 day per month since join date within this year.
-      const memberJoinDate = m.created_at ? new Date(m.created_at) : new Date();
-      const joinYear = memberJoinDate.getFullYear();
-      const currYear = new Date().getFullYear();
-      const currMonth = new Date().getMonth() + 1; // 1-12
-      const joinMonth = memberJoinDate.getMonth() + 1;
-      let accrued = 0;
-      
-      if (currYear > joinYear) accrued = currMonth; // They get 1 per month this year
-      else if (currYear === joinYear) accrued = Math.max(1, currMonth - joinMonth + 1);
-      
-      const balance = Math.min(LEAVE_ALLOWANCE, accrued) - used;
-      
-      return { name: m.name, used, balance, accrued: Math.min(LEAVE_ALLOWANCE, accrued) };
+    const balancesDisplay = members.filter(m => m.status === 'Active').map(m => {
+      const bObj = balances?.find(b => b.member_name === m.name);
+      return {
+        name: m.name,
+        balance: bObj?.balance || 0,
+        lastAccrual: bObj?.last_accrual_month || 'Not Set'
+      };
     });
 
     return (
@@ -261,12 +370,17 @@ export default function AttendancePage() {
             <div className="bg-surface border border-border rounded-xl p-4">
               <h4 className="text-sm font-semibold text-foreground mb-4">Annual Leave Balances</h4>
               <div className="space-y-3">
-                {balances.map(b => (
-                  <div key={b.name} className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">{b.name}</span>
+                {balancesDisplay.map(b => (
+                  <div key={b.name} className="flex justify-between items-center text-sm p-2 hover:bg-muted/50 rounded transition-colors group">
+                    <div className="flex flex-col">
+                      <span className="text-foreground font-medium">{b.name}</span>
+                      <span className="text-[10px] text-muted-foreground">Accrued: {b.lastAccrual}</span>
+                    </div>
                     <div className="flex gap-2 items-center">
-                      <span className="text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">{b.used} Used</span>
                       <span className={`font-bold ${b.balance <= 3 ? 'text-destructive' : 'text-success'}`}>{b.balance} Left</span>
+                      {isManager && (
+                        <button onClick={() => { setEditingBalanceMember(b.name); setIsBalanceModalOpen(true); }} className="opacity-0 group-hover:opacity-100 text-[10px] text-primary hover:underline transition-opacity">Edit</button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -368,6 +482,49 @@ export default function AttendancePage() {
             <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
               <button type="button" onClick={() => setIsLeaveModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Submit Request</button>
+            </div>
+          </form>
+        </Modal>
+
+        <Modal isOpen={isOtModalOpen} onClose={() => setIsOtModalOpen(false)} title={editingOtLog?.date ? "Edit Overtime" : "Add Overtime"}>
+          <form onSubmit={handleOTSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Employee Name *</label>
+              <select name="member_name" required defaultValue={editingOtLog?.member_name || currentUser?.name} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none">
+                {isManager ? members.filter(m => m.status === 'Active').map(m => <option key={m.id} value={m.name}>{m.name}</option>) : <option value={currentUser?.name}>{currentUser?.name}</option>}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+               <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1.5">Date *</label>
+                  <input name="date" type="date" required defaultValue={editingOtLog?.date || format(new Date(), 'yyyy-MM-dd')} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+               </div>
+               <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1.5">Hours *</label>
+                  <input name="hours" type="number" step="0.5" min="0.5" required defaultValue={editingOtLog?.overtime_hours || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" placeholder="e.g. 2.5" />
+               </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-1.5">Reason / Details *</label>
+              <textarea name="reason" rows={2} required defaultValue={editingOtLog?.overtime_desc || ''} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" placeholder="Reason for overtime..."></textarea>
+            </div>
+            <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
+              <button type="button" onClick={() => setIsOtModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
+              <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Save Overtime</button>
+            </div>
+          </form>
+        </Modal>
+
+        <Modal isOpen={isBalanceModalOpen} onClose={() => setIsBalanceModalOpen(false)} title="Update Leave Balance">
+          <form onSubmit={handleUpdateBalance} className="space-y-4">
+            <p className="text-sm text-muted-foreground">Set the initial manual balance for <strong className="text-foreground">{editingBalanceMember}</strong>. The system will auto-add +1 day per month starting next month.</p>
+            <div>
+               <label className="block text-sm font-medium text-muted-foreground mb-1.5">Current Balance (Days) *</label>
+               <input name="balance" type="number" required defaultValue={balances?.find(b => b.member_name === editingBalanceMember)?.balance || 0} className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-foreground focus:ring-1 focus:ring-primary outline-none" />
+            </div>
+            <div className="pt-4 flex justify-end gap-3 border-t border-border mt-6">
+              <button type="button" onClick={() => setIsBalanceModalOpen(false)} className="px-4 py-2 border border-border rounded-lg text-sm font-medium text-foreground hover:bg-surface">Cancel</button>
+              <button type="submit" className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium shadow-sm">Save Balance</button>
             </div>
           </form>
         </Modal>

@@ -159,6 +159,12 @@ function initSchema(db: Database.Database) {
       annual_used INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS user_leave_balances (
+      member_name TEXT PRIMARY KEY,
+      balance INTEGER DEFAULT 0,
+      last_accrual_month TEXT DEFAULT ''
+    );
+
     CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
     CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assignee);

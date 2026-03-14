@@ -29,7 +29,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json();
   const db = getDb();
   
-  const existing = db.prepare('SELECT * FROM leave_requests WHERE id = ?').get(body.id) as { id: number, member_name: string, start_date: string, end_date: string, status: string } | undefined;
+  const existing = db.prepare('SELECT * FROM leave_requests WHERE id = ?').get(body.id) as { id: number, member_name: string, start_date: string, end_date: string, status: string, leave_type: string, days_count: number } | undefined;
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   
   db.prepare('UPDATE leave_requests SET status = ?, approved_by = ? WHERE id = ?').run(
@@ -53,6 +53,14 @@ export async function PUT(req: NextRequest) {
       }
       
       currTarget.setDate(currTarget.getDate() + 1);
+    }
+    
+    // Deduct from manual Leave Balance if it's Annual Leave
+    if (existing.leave_type === 'Annual Leave') {
+      const balanceRecord = db.prepare('SELECT balance FROM user_leave_balances WHERE member_name = ?').get(existing.member_name) as { balance: number } | undefined;
+      if (balanceRecord) {
+        db.prepare('UPDATE user_leave_balances SET balance = balance - ? WHERE member_name = ?').run(existing.days_count, existing.member_name);
+      }
     }
   }
   
