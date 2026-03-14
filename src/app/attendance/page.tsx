@@ -237,7 +237,13 @@ export default function AttendancePage() {
       const [eh, em] = end.split(':').map(Number);
       let diff = (eh * 60 + em) - (sh * 60 + sm);
       if (diff < 0) diff += 24 * 60; // if shifted past midnight
-      const hours = diff / 60;
+      let hours = diff / 60;
+
+      // Saturday deduction (1 hour break time if worked on Sat)
+      const dayOfWeek = new Date(dateStr).getDay();
+      if (dayOfWeek === 6 && hours > 1) { // 6 = Saturday
+        hours -= 1;
+      }
 
       const existingShift = logs.find(l => l.member_name === mem && l.date === dateStr)?.shift || 'Off';
       
