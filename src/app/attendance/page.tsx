@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CalendarDays, Clock, FileText, ChevronLeft, ChevronRight, CheckCircle2, XCircle, Search, User, Download, Edit, Trash2 } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { useAuth } from '@/context/AuthContext';
-import { format, addDays, startOfWeek, subMonths, setDate, isWithinInterval } from 'date-fns';
+import { format, addDays, startOfWeek, subMonths, setDate, isWithinInterval, addMonths } from 'date-fns';
 import { toast } from 'sonner';
 import { Modal } from '@/components/Modal';
 import * as xlsx from 'xlsx';
@@ -346,7 +346,11 @@ export default function AttendancePage() {
 
   const OtTab = () => {
     // Cut-off Logic: 16th of previous month to 15th of current target month
-    const targetDate = subMonths(new Date(), otMonthOffset);
+    const currentDate = new Date();
+    const isPast15th = currentDate.getDate() >= 16;
+    const baseTargetDate = isPast15th ? addMonths(currentDate, 1) : currentDate;
+    
+    const targetDate = subMonths(baseTargetDate, otMonthOffset);
     const startOfCutoff = setDate(subMonths(targetDate, 1), 16);
     const endOfCutoff = setDate(targetDate, 15);
     
@@ -409,9 +413,14 @@ export default function AttendancePage() {
               <input placeholder="Search member..." value={otSearch} onChange={e => setOtSearch(e.target.value)} className="w-full bg-surface border border-border rounded-lg pl-9 pr-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none" />
             </div>
             <select value={otMonthOffset} onChange={e => setOtMonthOffset(Number(e.target.value))} className="bg-surface border border-border w-full sm:w-auto rounded-lg px-3 py-2 text-sm text-foreground focus:ring-1 focus:ring-primary outline-none cursor-pointer">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <option key={i} value={i}>{i === 0 ? 'Current Cut-off' : `Cut-off`} ({format(subMonths(new Date(), i), 'MMM yyyy')})</option>
-              ))}
+              {Array.from({ length: 12 }).map((_, i) => {
+                const currentDate = new Date();
+                const isPast15th = currentDate.getDate() >= 16;
+                const baseTargetDate = isPast15th ? addMonths(currentDate, 1) : currentDate;
+                return (
+                  <option key={i} value={i}>{i === 0 ? 'Current Cut-off' : `Cut-off`} ({format(subMonths(baseTargetDate, i), 'MMM yyyy')})</option>
+                );
+              })}
             </select>
             <button onClick={() => { setEditingOtLog(null); setIsOtModalOpen(true); }} className="px-4 py-2 w-full sm:w-auto bg-primary text-primary-foreground text-sm font-medium rounded-lg shadow whitespace-nowrap hover:bg-primary/90">
               + Add Overtime
